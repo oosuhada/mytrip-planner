@@ -19,13 +19,20 @@ The app is intentionally login-free for a small trusted travel group and stores 
 
 ## Screenshots
 
-| Day plan · 일정 | AI Inbox · AI 여행 도우미 |
-| --- | --- |
-| ![MyTrip day plan](docs/screenshots/day-plan.png) | ![MyTrip AI Inbox](docs/screenshots/ai-inbox.png) |
+Screenshots follow the same order as the in-app navigation.<br>
+스크린샷은 앱 왼쪽 메뉴와 동일한 순서로 정리했습니다.
 
-| Packing · 짐과 코디 | Home · 여행 프로젝트 |
+| 1. Day plan · 일정 | 2. Map discovery · 지도 · 발견 |
 | --- | --- |
-| ![MyTrip packing planner](docs/screenshots/packing.png) | ![MyTrip home screen](docs/screenshots/home.png) |
+| ![MyTrip day plan](docs/screenshots/day-plan.png) | ![MyTrip map discovery](docs/screenshots/map-discovery.png) |
+
+| 3. Candidates + voting · 후보 · 투표 | 4. Packing · 짐 · 코디 |
+| --- | --- |
+| ![MyTrip candidates and voting](docs/screenshots/voting.png) | ![MyTrip packing planner](docs/screenshots/packing.png) |
+
+**5. AI Inbox · AI 여행 도우미**
+
+![MyTrip AI Inbox](docs/screenshots/ai-inbox.png)
 
 ## Core experience
 
@@ -90,6 +97,25 @@ Cloudflare Tunnel → mytrip.oosu.dev
 The browser stays focused on interaction while booking parsing, AI calls, persistence, geocoding, weather, and realtime collaboration are handled server-side.
 
 브라우저는 여행 계획 인터랙션에 집중하고, 예약 파싱·AI 호출·데이터 저장·지오코딩·날씨·실시간 동기화는 서버에서 처리합니다.
+
+## Data persistence
+
+Trip data is **not stored in GitHub** and does not depend on GitHub's language statistics. The production service writes trips, events, saved places, votes, participants, packing bags, packing items, and import records to SQLite on the Mac mini. Browser `localStorage` is only used for lightweight UI state such as the current display name.
+
+여행 데이터는 **GitHub에 저장하지 않으며** GitHub의 Languages 통계와도 관계가 없습니다. 실제 운영 환경에서는 여행 프로젝트, 일정, 장소 후보, 투표, 동행자, 가방, 준비물, import 기록을 Mac mini의 SQLite에 저장합니다. 브라우저 `localStorage`는 현재 표시 이름 같은 가벼운 UI 상태에만 사용합니다.
+
+```text
+Mac mini
+└─ ~/Services/mytrip-planner/
+   ├─ data/
+   │  └─ mytrip.sqlite      # persistent application data
+   ├─ dist/                  # replaceable web build
+   └─ dist-server/           # replaceable server build
+```
+
+SQLite runs in **WAL mode**, and `data/` is gitignored so deployments can replace the application build without committing or overwriting the live database. Deployment-time SQLite snapshots are kept separately under `~/Backups/mytrip-planner/`.
+
+SQLite는 **WAL 모드**로 동작하며 `data/`는 Git에서 제외합니다. 따라서 새 코드를 배포할 때 애플리케이션 빌드는 교체하되 운영 DB는 그대로 유지할 수 있습니다. 배포 전 SQLite snapshot은 `~/Backups/mytrip-planner/` 아래에 별도로 보관합니다.
 
 ## AI behavior
 
