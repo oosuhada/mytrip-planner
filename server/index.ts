@@ -25,7 +25,7 @@ io.on('connection', (socket) => {
   socket.on('trip:leave', (tripId: string) => socket.leave(`trip:${tripId}`));
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, ai: aiEnabled(), maps: process.env.GOOGLE_MAPS_API_KEY ? 'google+osm' : 'osm', version: '0.2.0' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, ai: aiEnabled(), maps: process.env.GOOGLE_MAPS_API_KEY ? 'google+osm' : 'osm', version: '0.2.1' }));
 app.get('/api/trips', (_req, res) => res.json(listTrips()));
 
 app.post('/api/trips', (req, res) => {
