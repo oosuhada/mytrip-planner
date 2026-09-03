@@ -25,7 +25,7 @@ io.on('connection', (socket) => {
   socket.on('trip:leave', (tripId: string) => socket.leave(`trip:${tripId}`));
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, ai: aiEnabled(), maps: process.env.GOOGLE_MAPS_API_KEY ? 'google+osm' : 'osm', version: '0.1.0' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, ai: aiEnabled(), maps: process.env.GOOGLE_MAPS_API_KEY ? 'google+osm' : 'osm', version: '0.2.0' }));
 app.get('/api/trips', (_req, res) => res.json(listTrips()));
 
 app.post('/api/trips', (req, res) => {
@@ -192,11 +192,17 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
 app.post('/api/trips/:id/packing/generate', (req, res) => {
   const trip: any = getTrip(req.params.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
-  const days = Math.max(1, Math.round((new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / 86400000) + 1);
+  const days = Math.max(1, plainDateDiffDays(trip.start_date, trip.end_date) + 1);
   const suggestions = packingAdvice({ days, gender: req.body.gender, min: req.body.min, max: req.body.max, rain: req.body.rain });
-  const stmt = db.prepare('INSERT INTO packing_items (id, trip_id, label, category, owner, reason) VALUES (?, ?, ?, ?, ?, ?)');
+  const bags = db.prepare('SELECT id, name FROM packing_bags WHERE trip_id = ?').all(req.params.id) as any[];
+  const bagByName = new Map(bags.map((bag) => [bag.name, bag.id]));
+  const stmt = db.prepare('INSERT INTO packing_items (id, trip_id, label, category, owner, bag_id, source, reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   const existing = new Set((db.prepare('SELECT label FROM packing_items WHERE trip_id = ?').all(req.params.id) as any[]).map((x) => x.label));
-  for (const item of suggestions) if (!existing.has(item.label)) stmt.run(id(), req.params.id, item.label, item.category, req.body.owner || null, item.reason);
+  for (const item of suggestions) {
+    if (existing.has(item.label)) continue;
+    const bagName = item.category === '여행' ? '여권지갑' : item.category === '생활' ? '데일리 보조가방' : item.category === '코디' || item.category === '의류' || item.category === '신발' ? '체크인 캐리어' : '기내용 백팩';
+    stmt.run(id(), req.params.id, item.label, item.category, req.body.owner || 'Oosu', bagByName.get(bagName) || null, 'weather-ai', item.reason);
+  }
   emitTrip(req.params.id);
   res.json({ provider: aiEnabled() ? 'hybrid' : 'local-weather-aware', count: suggestions.length });
 });
@@ -204,8 +210,52 @@ app.post('/api/trips/:id/packing/generate', (req, res) => {
 app.patch('/api/packing/:id', (req, res) => {
   const item = db.prepare('SELECT trip_id FROM packing_items WHERE id = ?').get(req.params.id) as any;
   if (!item) return res.status(404).json({ error: 'Item not found' });
-  db.prepare('UPDATE packing_items SET checked = ? WHERE id = ?').run(req.body.checked ? 1 : 0, req.params.id);
+  const allowed = ['checked', 'owner', 'bag_id', 'quantity', 'weight_kg', 'label', 'category', 'reason'];
+  const updates = Object.entries(req.body).filter(([key]) => allowed.includes(key));
+  if (!updates.length) return res.json({ ok: true });
+  const normalized = updates.map(([key, value]) => [key, key === 'checked' ? (value ? 1 : 0) : value] as const);
+  db.prepare(`UPDATE packing_items SET ${normalized.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ?`).run(...normalized.map(([, value]) => value), req.params.id);
   emitTrip(item.trip_id);
+  res.json({ ok: true });
+});
+
+app.post('/api/trips/:id/packing/items', (req, res) => {
+  const label = String(req.body.label || '').trim();
+  if (!label) return res.status(400).json({ error: 'label required' });
+  const itemId = id();
+  db.prepare(`INSERT INTO packing_items (id, trip_id, label, category, owner, bag_id, quantity, weight_kg, source, reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(itemId, req.params.id, label, req.body.category || '기타', req.body.owner || 'Oosu', req.body.bag_id || null, Number(req.body.quantity || 1), Number(req.body.weight_kg || 0), 'manual', req.body.reason || null);
+  emitTrip(req.params.id);
+  res.status(201).json({ id: itemId });
+});
+
+app.delete('/api/packing/:id', (req, res) => {
+  const item = db.prepare('SELECT trip_id FROM packing_items WHERE id = ?').get(req.params.id) as any;
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  db.prepare('DELETE FROM packing_items WHERE id = ?').run(req.params.id);
+  emitTrip(item.trip_id);
+  res.json({ ok: true });
+});
+
+app.post('/api/trips/:id/packing/bags', (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const bagId = id();
+  db.prepare('INSERT INTO packing_bags (id, trip_id, name, kind, owner, weight_limit, tare_weight, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(bagId, req.params.id, name, req.body.kind || 'bag', req.body.owner || 'Oosu', req.body.weight_limit ?? null, Number(req.body.tare_weight || 0), req.body.notes || null);
+  emitTrip(req.params.id);
+  res.status(201).json({ id: bagId });
+});
+
+app.patch('/api/packing/bags/:id', (req, res) => {
+  const bag = db.prepare('SELECT trip_id FROM packing_bags WHERE id = ?').get(req.params.id) as any;
+  if (!bag) return res.status(404).json({ error: 'Bag not found' });
+  const allowed = ['name', 'kind', 'owner', 'weight_limit', 'tare_weight', 'notes'];
+  const updates = Object.entries(req.body).filter(([key]) => allowed.includes(key));
+  if (!updates.length) return res.json({ ok: true });
+  db.prepare(`UPDATE packing_bags SET ${updates.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ?`).run(...updates.map(([, value]) => value), req.params.id);
+  emitTrip(bag.trip_id);
   res.json({ ok: true });
 });
 
@@ -218,6 +268,14 @@ async function geocodeOne(q: string) {
     if (!x) return {};
     return { lat: Number(x.lat), lng: Number(x.lon), address: x.display_name };
   } catch { return {}; }
+}
+
+function plainDateDiffDays(start: string, end: string) {
+  const toUtc = (value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+  return Math.round((toUtc(end) - toUtc(start)) / 86400000);
 }
 
 if (process.env.NODE_ENV === 'production') {

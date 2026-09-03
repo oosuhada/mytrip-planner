@@ -47,8 +47,22 @@ export type PackingItem = {
   label: string;
   category: string;
   owner?: string | null;
+  bag_id?: string | null;
+  quantity: number;
+  weight_kg: number;
+  source?: string | null;
   checked: number;
   reason?: string | null;
+};
+
+export type PackingBag = {
+  id: string;
+  name: string;
+  kind: string;
+  owner?: string | null;
+  weight_limit?: number | null;
+  tare_weight: number;
+  notes?: string | null;
 };
 
 export type Trip = TripSummary & {
@@ -56,6 +70,7 @@ export type Trip = TripSummary & {
   events: TripEvent[];
   places: Place[];
   packing: PackingItem[];
+  packing_bags: PackingBag[];
 };
 
 export type WeatherDay = { date: string; code: number; max: number; min: number; rain: number };

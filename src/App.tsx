@@ -5,7 +5,7 @@ import maplibregl, { Marker } from 'maplibre-gl';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, GripVertical,
   Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  Plus, Search, Sparkles, Trash2, Users, Vote, X,
+  Plus, Printer, Search, Send, Sparkles, Trash2, Users, Vote, X,
 } from 'lucide-react';
 import { api, del, patch, post } from './api';
 import type { PackingItem, Place, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay } from './types';
@@ -52,7 +52,7 @@ function HomePage() {
       <section className="hero">
         <div>
           <p className="eyebrow">ONE PLACE FOR THE WHOLE TRIP</p>
-          <h1>계획부터 여행 중 일정까지,<br /><em>여기 하나만.</em></h1>
+          <h1>계획부터 일정까지,<br /><em>MyTrip.</em></h1>
           <p className="hero-copy">예약 메일을 붙여넣고, 지도에서 장소를 모으고, 친구와 투표한 뒤 드래그해서 하루 일정으로 완성하세요.</p>
         </div>
         <button className="primary big" onClick={() => setCreating(true)}><Plus size={19} /> 새 여행 만들기</button>
@@ -71,7 +71,7 @@ function HomePage() {
       </section>
 
       <section className="workflow-strip">
-        <div><Import /><strong>붙여넣기</strong><span>항공·숙소 예약문 자동 구조화</span></div>
+        <div><Import /><strong>붙여넣기 · 질문하기</strong><span>예약문 구조화와 여행 AI 상담</span></div>
         <div><Map /><strong>모으기</strong><span>지도 검색과 AI 장소 추천</span></div>
         <div><Vote /><strong>고르기</strong><span>친구와 후보 투표</span></div>
         <div><CalendarDays /><strong>일정화</strong><span>드래그해서 날짜 변경</span></div>
@@ -96,7 +96,10 @@ function TripPage({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tab, setTab] = useState<Tab>('schedule');
   const [weather, setWeather] = useState<WeatherDay[]>([]);
-  const [plannerName, setPlannerName] = useState(() => localStorage.getItem('mytrip-name') || 'Woosu');
+  const [plannerName, setPlannerName] = useState(() => {
+    const stored = localStorage.getItem('mytrip-name');
+    return !stored || stored === 'Woosu' ? 'Oosu' : stored;
+  });
   const [quickAdd, setQuickAdd] = useState(false);
 
   const load = useCallback(() => api<Trip>(`/api/trips/${tripId}`).then(setTrip), [tripId]);
@@ -147,7 +150,7 @@ function TripPage({ tripId }: { tripId: string }) {
           {tab === 'map' && <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />}
           {tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
           {tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={load} />}
-          {tab === 'inbox' && <InboxPanel trip={trip} reload={load} />}
+          {tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={load} />}
         </div>
       </section>
       {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={load} />}
@@ -160,11 +163,13 @@ function NavButton({ active, icon, label, onClick, count }: { active: boolean; i
 }
 
 function TripHeader({ trip, weather, onAdd }: { trip: Trip; weather: WeatherDay[]; onAdd: () => void }) {
-  const todayWeather = weather[0];
+  const today = todayInTimeZone('Asia/Tokyo');
+  const featuredWeather = weather.find((item) => item.date === today) || weather[0];
+  const forecastLabel = featuredWeather ? (featuredWeather.date === today ? '오늘 예보' : `${formatMonthDay(featuredWeather.date)} 예보`) : '';
   return <header className="trip-header">
     <div><p className="eyebrow">{trip.destination}</p><h1>{trip.title}</h1><p className="trip-meta"><span><CalendarDays size={14} /> {formatDateRange(trip.start_date, trip.end_date)}</span><span><Users size={14} /> {trip.participants.map((p) => p.name).join(' · ') || '친구 추가 가능'}</span></p></div>
     <div className="header-actions">
-      {todayWeather && <div className="weather-chip"><span>{weatherIcon(todayWeather.code)}</span><div><strong>{Math.round(todayWeather.max)}°</strong><small>{Math.round(todayWeather.min)}° · rain {todayWeather.rain}%</small></div></div>}
+      {featuredWeather && <div className="weather-chip"><span>{weatherIcon(featuredWeather.code)}</span><div><strong>{Math.round(featuredWeather.max)}° / {Math.round(featuredWeather.min)}°</strong><small>{forecastLabel} · 강수 {featuredWeather.rain}%</small></div></div>}
       <button className="primary" onClick={onAdd}><Plus size={17} /> 일정 추가</button>
     </div>
   </header>;
@@ -191,7 +196,7 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
 function DayColumn({ date, index, events, weather, reload }: { date: string; index: number; events: TripEvent[]; weather?: WeatherDay; reload: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${date}` });
   return <section className={`day-column ${isOver ? 'drop-active' : ''}`} ref={setNodeRef}>
-    <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong></div>{weather && <div className="day-weather">{weatherIcon(weather.code)} <span>{Math.round(weather.max)}°</span></div>}</header>
+    <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong></div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
     <div className="day-events">
       {events.length ? events.map((event) => <EventCard key={event.id} event={event} reload={reload} />) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
     </div>
@@ -287,28 +292,75 @@ function VotePanel({ trip, plannerName, reload }: { trip: Trip; plannerName: str
 function PackingPanel({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
   const [gender, setGender] = useState('male');
   const [generating, setGenerating] = useState(false);
+  const [addingBag, setAddingBag] = useState(false);
+  const [bagForm, setBagForm] = useState({ name: '', weight_limit: '' });
+  const [itemForm, setItemForm] = useState({ label: '', category: '기타', owner: 'Oosu', bag_id: '' });
   const min = weather.length ? Math.min(...weather.map((w)=>w.min)) : 18;
   const max = weather.length ? Math.max(...weather.map((w)=>w.max)) : 27;
   const rain = weather.length ? Math.max(...weather.map((w)=>w.rain)) : 30;
-  async function generate() { setGenerating(true); try { await post(`/api/trips/${trip.id}/packing/generate`, { gender, min, max, rain }); reload(); } finally { setGenerating(false); } }
+  async function generate() { setGenerating(true); try { await post(`/api/trips/${trip.id}/packing/generate`, { gender, min, max, rain, owner: 'Oosu' }); reload(); } finally { setGenerating(false); } }
+  async function addBag() {
+    if (!bagForm.name.trim()) return;
+    await post(`/api/trips/${trip.id}/packing/bags`, { name: bagForm.name.trim(), weight_limit: bagForm.weight_limit ? Number(bagForm.weight_limit) : null, owner: 'Oosu' });
+    setBagForm({ name: '', weight_limit: '' }); setAddingBag(false); reload();
+  }
+  async function addItem() {
+    if (!itemForm.label.trim()) return;
+    await post(`/api/trips/${trip.id}/packing/items`, { ...itemForm, bag_id: itemForm.bag_id || trip.packing_bags?.[0]?.id || null });
+    setItemForm({ label: '', category: '기타', owner: 'Oosu', bag_id: '' }); reload();
+  }
   const groups = useMemo(() => trip.packing.reduce<Record<string, PackingItem[]>>((acc, item) => {
     (acc[item.category] ||= []).push(item);
     return acc;
   }, {}), [trip.packing]);
-  return <div className="panel-page packing-page"><div className="page-title"><div><p className="eyebrow">WEATHER-AWARE PACKING</p><h2>짐 · 코디 추천</h2><p>{weather.length ? `예보 기준 ${Math.round(min)}–${Math.round(max)}°C · 최대 강수확률 ${Math.round(rain)}%` : '여행 기간과 계절을 기준으로 추천합니다.'}</p></div></div>
-    <div className="packing-top"><div className="outfit-card"><div><Sparkles/><span>추천 기준</span></div><h3>{max >= 27 ? '가볍게, 레이어는 한 장' : '레이어 중심으로 준비'}</h3><p>도보가 많은 교토·오사카 일정에 맞춰 편안함을 우선합니다.</p><div className="segmented"><button className={gender==='male'?'active':''} onClick={()=>setGender('male')}>남성</button><button className={gender==='female'?'active':''} onClick={()=>setGender('female')}>여성</button><button className={gender==='neutral'?'active':''} onClick={()=>setGender('neutral')}>중립</button></div><button className="primary" onClick={generate} disabled={generating}><Sparkles size={15}/>{generating?'생성 중…':'추천 목록 만들기'}</button></div>
-      <div className="weather-days">{weather.map((w)=><div key={w.date}><span>{formatDay(w.date)}</span><b>{weatherIcon(w.code)} {Math.round(w.max)}°</b><small>{Math.round(w.min)}° · rain {w.rain}%</small></div>)}</div></div>
-    <div className="packing-groups">{Object.entries(groups).map(([category, items]) => <section key={category}><h3>{category}<span>{items?.length || 0}</span></h3>{items?.map((item: PackingItem)=><label className={`packing-item ${item.checked?'done':''}`} key={item.id}><input type="checkbox" checked={Boolean(item.checked)} onChange={async(e)=>{await patch(`/api/packing/${item.id}`,{checked:e.target.checked});reload();}}/><span className="check-ui">{item.checked ? <Check size={14}/> : null}</span><div><strong>{item.label}</strong><small>{item.reason}</small></div></label>)}</section>)}</div>
+  const bagWeight = (bagId: string) => {
+    const bag = trip.packing_bags?.find((item) => item.id === bagId);
+    return (bag?.tare_weight || 0) + trip.packing.filter((item) => item.bag_id === bagId).reduce((sum, item) => sum + Number(item.weight_kg || 0) * Number(item.quantity || 1), 0);
+  };
+  return <div className="panel-page packing-page"><div className="page-title packing-title"><div><p className="eyebrow">PACK · WEAR · CHECK</p><h2>짐 · 코디 · 가방 플래너</h2><p>{weather.length ? `여행일별 예보 ${Math.round(min)}–${Math.round(max)}°C · 최대 강수확률 ${Math.round(rain)}%` : '여행 기간과 체크리스트를 기준으로 준비합니다.'}</p></div><button className="secondary print-button" onClick={()=>window.print()}><Printer size={15}/> 체크리스트 인쇄</button></div>
+    <div className="packing-top"><div className="outfit-card"><div><Sparkles/><span>코디 추천</span></div><h3>{max >= 27 ? '통기성 좋은 옷 + 얇은 레이어' : '레이어 중심으로 준비'}</h3><p>Oosu · Domenic 모두 도보가 많은 일정이므로 워킹화와 가벼운 상의를 기본으로 하고, 비 예보가 있는 날은 젖어도 관리하기 쉬운 하의와 접이식 우산을 우선합니다.</p><div className="segmented"><button className={gender==='male'?'active':''} onClick={()=>setGender('male')}>남성</button><button className={gender==='female'?'active':''} onClick={()=>setGender('female')}>여성</button><button className={gender==='neutral'?'active':''} onClick={()=>setGender('neutral')}>중립</button></div><button className="primary" onClick={generate} disabled={generating}><Sparkles size={15}/>{generating?'생성 중…':'날씨 기반 항목 추가'}</button></div>
+      <div className="weather-days outfit-days">{weather.map((w)=><div key={w.date}><span>{formatDay(w.date)}</span><b>{weatherIcon(w.code)} {Math.round(w.max)}° / {Math.round(w.min)}°</b><small>{weatherLabel(w.code)} · 강수 {w.rain}%</small><em>{outfitForWeather(w)}</em></div>)}</div></div>
+
+    <div className="baggage-rule"><Luggage size={18}/><div><strong>이번 항공 수하물 기준</strong><span>Oosu · Domenic 각각 출국: 기내 10kg + 위탁 15kg / 귀국: 기내 10kg + 위탁 0kg. 귀국 전 체크인 캐리어 물건을 기내용/배송/추가수하물로 재배치해야 합니다.</span></div></div>
+
+    <section className="bag-planner print-section"><div className="packing-section-head"><div><p className="eyebrow">BAG PLAN</p><h3>가방별로 나눠 담기</h3></div><button className="secondary no-print" onClick={()=>setAddingBag(!addingBag)}><Plus size={14}/> 가방 추가</button></div>
+      {addingBag && <div className="inline-add no-print"><input placeholder="가방 이름" value={bagForm.name} onChange={(e)=>setBagForm({...bagForm,name:e.target.value})}/><input type="number" min="0" step="0.1" placeholder="제한 kg" value={bagForm.weight_limit} onChange={(e)=>setBagForm({...bagForm,weight_limit:e.target.value})}/><button className="primary" onClick={addBag}>추가</button></div>}
+      <div className="bag-grid">{(trip.packing_bags || []).map((bag)=>{const weight=bagWeight(bag.id);const ratio=bag.weight_limit ? Math.min(100,(weight/bag.weight_limit)*100) : 0;return <article className="bag-card" key={bag.id}><div className="bag-card-head"><div><Luggage size={18}/><span><strong>{bag.name}</strong><small>{bag.owner || '공용'}</small></span></div><b>{weight.toFixed(1)}{bag.weight_limit ? ` / ${bag.weight_limit}` : ''} kg</b></div>{bag.weight_limit ? <div className={`weight-meter ${weight>bag.weight_limit?'over':''}`}><i style={{width:`${ratio}%`}}/></div>:null}<p>{bag.notes}</p><small>{trip.packing.filter((item)=>item.bag_id===bag.id).length}개 항목</small></article>})}</div>
+    </section>
+
+    <section className="packing-checklist print-section"><div className="packing-section-head"><div><p className="eyebrow">CHECKLIST</p><h3>준비물 체크리스트</h3></div></div>
+      <div className="inline-add item-add no-print"><input placeholder="새 준비물" value={itemForm.label} onChange={(e)=>setItemForm({...itemForm,label:e.target.value})}/><input placeholder="카테고리" value={itemForm.category} onChange={(e)=>setItemForm({...itemForm,category:e.target.value})}/><select value={itemForm.owner} onChange={(e)=>setItemForm({...itemForm,owner:e.target.value})}>{trip.participants.map((p)=><option key={p.id}>{p.name}</option>)}<option>공용</option></select><select value={itemForm.bag_id} onChange={(e)=>setItemForm({...itemForm,bag_id:e.target.value})}><option value="">가방 선택</option>{(trip.packing_bags||[]).map((bag)=><option key={bag.id} value={bag.id}>{bag.name}</option>)}</select><button className="primary" onClick={addItem}><Plus size={14}/> 추가</button></div>
+      <div className="packing-groups">{Object.entries(groups).map(([category, items]) => <section key={category}><h3>{category}<span>{items?.filter((item)=>item.checked).length || 0}/{items?.length || 0}</span></h3>{items?.map((item: PackingItem)=><div className={`packing-item packing-item-rich ${item.checked?'done':''}`} key={item.id}><label className="packing-check"><input type="checkbox" checked={Boolean(item.checked)} onChange={async(e)=>{await patch(`/api/packing/${item.id}`,{checked:e.target.checked});reload();}}/><span className="check-ui">{item.checked ? <Check size={14}/> : null}</span></label><div className="packing-item-copy"><strong>{item.label}</strong><small>{item.reason}</small><span className="item-source">{item.source==='pdf-template'?'체크리스트 기반':item.source==='weather-ai'?'날씨 추천':'직접 추가'}</span></div><select className="packing-select" value={item.owner || '공용'} onChange={async(e)=>{await patch(`/api/packing/${item.id}`,{owner:e.target.value==='공용'?null:e.target.value});reload();}}><option>공용</option>{trip.participants.map((p)=><option key={p.id}>{p.name}</option>)}</select><select className="packing-select" value={item.bag_id || ''} onChange={async(e)=>{await patch(`/api/packing/${item.id}`,{bag_id:e.target.value||null});reload();}}><option value="">미배정</option>{(trip.packing_bags||[]).map((bag)=><option key={bag.id} value={bag.id}>{bag.name}</option>)}</select><label className="weight-input"><input type="number" min="0" step="0.05" defaultValue={Number(item.weight_kg||0)} onBlur={async(e)=>{await patch(`/api/packing/${item.id}`,{weight_kg:Number(e.target.value||0)});reload();}}/><span>kg</span></label><button className="ghost-icon no-print" onClick={async()=>{await del(`/api/packing/${item.id}`);reload();}}><Trash2 size={13}/></button></div>)}</section>)}</div>
+    </section>
   </div>;
 }
 
-function InboxPanel({ trip, reload }: { trip: Trip; reload: () => void }) {
+function InboxPanel({ trip, weather, plannerName, reload }: { trip: Trip; weather: WeatherDay[]; plannerName: string; reload: () => void }) {
+  const [mode, setMode] = useState<'ask'|'import'>('ask');
+  const [prompt, setPrompt] = useState('교토에서 숙소 동선 기준으로 저녁에 갈 만한 곳 추천해줘');
+  const [answer, setAnswer] = useState<{message?:string;ideas?:any[];provider?:string}|null>(null);
+  const [savedIdeas, setSavedIdeas] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
   const [result, setResult] = useState<{summary:string;inserted:number;parser:string}|null>(null);
   const [loading, setLoading] = useState(false);
+  async function ask() {
+    if (!prompt.trim()) return;
+    setLoading(true);
+    try {
+      const weatherText = weather.map((w)=>`${w.date} ${weatherLabel(w.code)} ${Math.round(w.max)}/${Math.round(w.min)}C rain ${w.rain}%`).join('; ');
+      const r:any = await post(`/api/trips/${trip.id}/ai/ideas`, { prompt, weather: weatherText });
+      setAnswer(r);
+    } finally { setLoading(false); }
+  }
+  async function saveIdea(idea:any) {
+    await post(`/api/trips/${trip.id}/places`, { name: idea.name, category: idea.category || 'AI 추천', address: idea.area || null, notes: [idea.reason, idea.bestTime ? `추천 시간: ${idea.bestTime}` : ''].filter(Boolean).join(' · '), saved_by: plannerName || 'Oosu' });
+    setSavedIdeas((prev)=>new Set(prev).add(idea.name)); reload();
+  }
   async function parse() { if (!text.trim()) return; setLoading(true); try { const r:any=await post(`/api/trips/${trip.id}/import`,{text}); setResult(r); setText(''); reload(); } finally { setLoading(false); } }
-  return <div className="inbox-page"><div className="inbox-copy"><p className="eyebrow">AI INBOX</p><h2>메일·메신저 내용을<br/>그냥 붙여넣으세요.</h2><p>항공권, 호텔 예약, 기차표처럼 날짜·시간·장소가 섞인 텍스트를 일정 카드로 바꿉니다. 예약번호·전화번호·결제정보는 일정 데이터에 보존하지 않습니다.</p><div className="privacy-note"><Sparkles size={18}/><div><strong>키가 있으면 AI, 없어도 로컬 파서</strong><span>외부 AI 키가 설정되지 않아도 일반적인 항공/숙소 형식은 기본 파서가 처리합니다.</span></div></div></div>
-    <div className="import-card"><div className="import-toolbar"><span><Import size={15}/> Paste anything</span><span>{text.length.toLocaleString()} chars</span></div><textarea value={text} onChange={(e)=>setText(e.target.value)} placeholder={'예:\n2026년 9월 13일\nICN - KIX\n08:00 - 10:05\nHOTEL ...\n체크인 15:00'} /><button className="primary full" onClick={parse} disabled={loading||!text.trim()}><Sparkles size={16}/>{loading?'일정으로 정리하는 중…':'AI로 일정화하기'}</button>{result&&<div className="import-result"><Check size={18}/><div><strong>{result.inserted}개 일정 추가 · {result.parser}</strong><p>{result.summary}</p></div></div>}</div>
+  return <div className="inbox-page inbox-upgraded"><div className="inbox-copy"><p className="eyebrow">AI INBOX</p><h2>예약도 붙여넣고,<br/>여행 질문도 여기서.</h2><p>항공·호텔 예약문은 구조화해서 일정으로 넣고, “비 오면 어디 가지?”, “숙소 근처 저녁 추천해줘” 같은 질문은 여행 일정과 날짜별 예보를 참고해 답합니다. 마음에 드는 AI 추천은 바로 <strong>후보 · 투표</strong>에 저장할 수 있습니다.</p><div className="privacy-note"><Sparkles size={18}/><div><strong>Oosu · Domenic의 여행 컨텍스트 사용</strong><span>현재 여행 날짜, 저장 장소, 날씨 예보를 함께 참고합니다. 예약번호·전화번호·결제정보는 일정 데이터에 보존하지 않습니다.</span></div></div></div>
+    <div className="import-card ai-inbox-card"><div className="inbox-tabs"><button className={mode==='ask'?'active':''} onClick={()=>setMode('ask')}><MessageCircle size={15}/> AI에게 물어보기</button><button className={mode==='import'?'active':''} onClick={()=>setMode('import')}><Import size={15}/> 예약 · 자료 붙여넣기</button></div>
+      {mode==='ask' ? <div className="ask-pane"><div className="import-toolbar"><span><Sparkles size={15}/> Trip copilot</span><span>{plannerName || 'Oosu'}로 저장</span></div><textarea value={prompt} onChange={(e)=>setPrompt(e.target.value)} placeholder="예: 9/14 비가 오면 교토에서 실내 위주로 어떻게 보내면 좋아?"/><button className="primary full" onClick={ask} disabled={loading||!prompt.trim()}><Send size={16}/>{loading?'생각하는 중…':'AI에게 물어보기'}</button>{answer&&<div className="inbox-answer"><div className="answer-head"><Sparkles size={16}/><div><strong>MyTrip AI</strong><small>{answer.provider || 'AI'}</small></div></div><p>{answer.message}</p><div className="inbox-idea-list">{(answer.ideas||[]).map((idea:any,i:number)=><article key={`${idea.name}-${i}`}><div><span>{idea.category}</span><small>{idea.area}</small></div><h3>{idea.name}</h3><p>{idea.reason}</p><footer><span>{idea.bestTime ? `추천 시간 · ${idea.bestTime}` : '여행 후보'}</span><button disabled={savedIdeas.has(idea.name)} onClick={()=>saveIdea(idea)}><Heart size={14}/>{savedIdeas.has(idea.name)?'후보에 저장됨':'후보 · 투표에 저장'}</button></footer></article>)}</div></div>}</div> : <div className="import-pane"><div className="import-toolbar"><span><Import size={15}/> Paste anything</span><span>{text.length.toLocaleString()} chars</span></div><textarea value={text} onChange={(e)=>setText(e.target.value)} placeholder={'예:\n2026년 9월 13일\nICN - KIX\n08:00 - 10:05\nHOTEL ...\n체크인 15:00'} /><button className="primary full" onClick={parse} disabled={loading||!text.trim()}><Sparkles size={16}/>{loading?'일정으로 정리하는 중…':'AI로 일정화하기'}</button>{result&&<div className="import-result"><Check size={18}/><div><strong>{result.inserted}개 일정 추가 · {result.parser}</strong><p>{result.summary}</p></div></div>}</div>}
+    </div>
   </div>;
 }
 
@@ -318,8 +370,18 @@ function QuickAdd({ trip, onClose, reload }: { trip: Trip; onClose: () => void; 
   return <div className="modal-backdrop" onMouseDown={onClose}><div className="modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">QUICK ADD</p><h2>일정 추가</h2></div><button className="icon-btn" onClick={onClose}><X/></button></div><label>제목<input autoFocus value={form.title} onChange={(e)=>setForm({...form,title:e.target.value})} placeholder="카페, 관광지, 식사…"/></label><div className="form-row"><label>종류<select value={form.kind} onChange={(e)=>setForm({...form,kind:e.target.value})}><option value="activity">일정</option><option value="reservation">예약</option><option value="train">교통</option><option value="hotel">숙소</option><option value="flight">항공</option></select></label><label>날짜<select value={form.date} onChange={(e)=>setForm({...form,date:e.target.value})}>{dateRange(trip.start_date,trip.end_date).map(d=><option key={d}>{d}</option>)}</select></label></div><div className="form-row"><label>시작<input type="time" value={form.start_time} onChange={(e)=>setForm({...form,start_time:e.target.value})}/></label><label>종료<input type="time" value={form.end_time} onChange={(e)=>setForm({...form,end_time:e.target.value})}/></label></div><label>장소<input value={form.location} onChange={(e)=>setForm({...form,location:e.target.value})} placeholder="장소 이름을 넣으면 좌표도 찾아봅니다"/></label><label>메모<textarea rows={3} value={form.notes} onChange={(e)=>setForm({...form,notes:e.target.value})}/></label><button className="primary full" onClick={save}>추가하기</button></div></div>;
 }
 
-function dateRange(start: string, end: string) { const out=[]; const d=new Date(`${start}T00:00:00`), e=new Date(`${end}T00:00:00`); while(d<=e){out.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);} return out; }
-function formatDay(date:string){return new Intl.DateTimeFormat('ko-KR',{month:'numeric',day:'numeric',weekday:'short'}).format(new Date(`${date}T00:00:00`));}
-function formatDateRange(start:string,end:string){const s=new Date(`${start}T00:00:00`),e=new Date(`${end}T00:00:00`);return `${s.getFullYear()}. ${s.getMonth()+1}. ${s.getDate()} — ${e.getMonth()+1}. ${e.getDate()}`;}
+function dateRange(start: string, end: string) {
+  const out:string[]=[];
+  let cursor=plainDateUtc(start), finish=plainDateUtc(end);
+  while(cursor<=finish){out.push(new Date(cursor).toISOString().slice(0,10));cursor+=86400000;}
+  return out;
+}
+function plainDateUtc(value:string){const [year,month,day]=value.split('-').map(Number);return Date.UTC(year,month-1,day);}
+function formatDay(date:string){return new Intl.DateTimeFormat('ko-KR',{month:'numeric',day:'numeric',weekday:'short',timeZone:'UTC'}).format(new Date(plainDateUtc(date)));}
+function formatMonthDay(date:string){const [,month,day]=date.split('-').map(Number);return `${month}/${day}`;}
+function formatDateRange(start:string,end:string){const [year,month,day]=start.split('-').map(Number),[,endMonth,endDay]=end.split('-').map(Number);return `${year}. ${month}. ${day} — ${endMonth}. ${endDay}`;}
+function todayInTimeZone(timeZone:string){const parts=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone}).formatToParts(new Date());const get=(type:string)=>parts.find((part)=>part.type===type)?.value;return `${get('year')}-${get('month')}-${get('day')}`;}
 function weatherIcon(code:number){if(code>=95)return '⛈';if(code>=61)return '🌧';if(code>=51)return '🌦';if(code>=45)return '🌫';if(code>=2)return '⛅';return '☀️';}
+function weatherLabel(code:number){if(code>=95)return '뇌우';if(code>=80)return '소나기';if(code>=61)return '비';if(code>=51)return '이슬비';if(code>=45)return '안개';if(code>=3)return '흐림';if(code>=1)return '구름 조금';return '맑음';}
+function outfitForWeather(day:WeatherDay){if(day.rain>=60)return '통기성 상의 · 마르기 쉬운 하의 · 워킹화 · 우산';if(day.max>=29)return '반팔 · 얇은 하의 · 선스크린 · 모자';if(day.min<=20)return '반팔 + 얇은 셔츠/가디건 · 편한 팬츠';return '가벼운 상의 · 편한 팬츠 · 워킹화';}
 function escapeHtml(value:string){return value.replace(/[&<>'"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]||c));}
