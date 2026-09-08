@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS packing_items (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_packing_items_trip_status_category_created
+  ON packing_items(trip_id, checked, category, created_at);
+
 CREATE TABLE IF NOT EXISTS packing_bags (
   id TEXT PRIMARY KEY,
   trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
