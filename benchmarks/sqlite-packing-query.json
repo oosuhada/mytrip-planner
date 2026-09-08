@@ -1,0 +1,33 @@
+{
+  "experiment": "mytrip-sqlite-packing-query-v1",
+  "base_git_sha": "2193a8954d82161f43d87bea68827b28811e187a",
+  "recorded_at": "2026-09-08T13:21:30.767Z",
+  "fixture": {
+    "rows": 120000,
+    "trips": 240,
+    "repeats": 40
+  },
+  "query": "SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at",
+  "before": {
+    "p50_ms": 3.1167,
+    "p95_ms": 3.2832,
+    "mean_ms": 3.1246,
+    "plan": [
+      "SCAN packing_items",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  },
+  "after": {
+    "p50_ms": 0.2267,
+    "p95_ms": 0.2648,
+    "mean_ms": 0.2359,
+    "plan": [
+      "SEARCH packing_items USING INDEX idx_packing_items_trip_status_category_created (trip_id=?)"
+    ]
+  },
+  "p95_improvement_percent": 91.93,
+  "limitations": [
+    "In-memory synthetic SQLite fixture isolates query/index behavior; it is not a Mac mini production latency claim.",
+    "The benchmark does not measure WAL fsync, concurrent writers, or filesystem cache misses."
+  ]
+}

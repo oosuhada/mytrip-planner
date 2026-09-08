@@ -1,3 +1,5 @@
+import { fetchWithRetry } from './reliability.js';
+
 type ParsedEvent = {
   title: string;
   kind: string;
@@ -75,13 +77,19 @@ export function packingAdvice(input: { days: number; gender?: string; min?: numb
 }
 
 async function callOpenAI(system: string, user: string) {
-  const response = await fetch(`${baseUrl}/responses`, {
+  const { response } = await fetchWithRetry(`${baseUrl}/responses`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({ model, instructions: system, input: user }),
+  }, {
+    maxRetries: Number(process.env.OPENAI_MAX_RETRIES || 2),
+    timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS || 8000),
+    baseDelayMs: 200,
+    maxDelayMs: 2000,
+    jitterRatio: 0.2,
   });
   if (!response.ok) throw new Error(`OpenAI ${response.status}: ${await response.text()}`);
   const json: any = await response.json();

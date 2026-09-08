@@ -117,6 +117,10 @@ SQLite runs in **WAL mode**, and `data/` is gitignored so deployments can replac
 
 SQLite는 **WAL 모드**로 동작하며 `data/`는 Git에서 제외합니다. 따라서 새 코드를 배포할 때 애플리케이션 빌드는 교체하되 운영 DB는 그대로 유지할 수 있습니다. 배포 전 SQLite snapshot은 `~/Backups/mytrip-planner/` 아래에 별도로 보관합니다.
 
+The packing-list read path is also profiled rather than described only at the schema level. `npm run benchmark:db` seeds an isolated 120k-row SQLite fixture, records `EXPLAIN QUERY PLAN`, and compares the production query shape before/after the `(trip_id, checked, category, created_at)` composite index. The result is stored in `benchmarks/sqlite-packing-query.json`; it is explicitly a local synthetic query-plan experiment, not a production latency claim.
+
+Outbound OpenAI requests now have a bounded timeout and a two-retry exponential-backoff budget for network errors, 408, 429 and 5xx responses. Non-retryable 4xx responses fail immediately and the existing deterministic booking/recommendation fallbacks remain the final degradation path.
+
 ## AI behavior
 
 With `OPENAI_API_KEY`, MyTrip uses the server-side OpenAI Responses API for booking extraction and trip-aware recommendations. The key is never exposed to the browser.
