@@ -66,15 +66,15 @@ Canonical status: **this file is the human-readable source of truth for the trav
 
 | Time | Plan | Transport / notes |
 |---|---|---|
-| 05:08–05:20 | **Home → Hongik Univ. AREX** | Walk from 10 Wausan-ro 38-gil (Donggyo-dong 188-6); about 7 min normally, 12 min budgeted with luggage |
-| 05:28–06:22 | **AREX first train · Hongik Univ. → ICN T1** | All-stop train. 05:28 is the current first airport-bound train; 05:47 is a fallback, while 05:57 or later is too tight for comfort |
-| 06:22–07:35 | **ICN T1 security / departure immigration / gate** | Assumes T’way online check-in is already complete and there is no currency exchange or other counter errand; weekend security lines are the main risk |
+| 05:45–05:52 | **Home → Hongik Univ. AREX** | Walk from 10 Wausan-ro 38-gil (Donggyo-dong 188-6); about 7 min normally. This deliberately targets the 05:57 train, so rain/luggage leaves little platform buffer |
+| 05:57–06:52 | **AREX · Hongik Univ. → ICN T1** | All-stop train. User-selected departure; online check-in is assumed complete |
+| 06:52–07:35 | **ICN T1 security / departure immigration / gate** | No currency exchange or airline-counter errand planned. Go directly to security; the trade-off is a tighter airport buffer |
 | 08:00–10:05 | T’way ICN → KIX | Confirmed booking |
 | 10:05–10:55 | **KIX T1 immigration / arrival** | Visit Japan Web QR ready; allow 30–60 min variation. Collect checked baggage here only if applicable |
 | 10:55–11:10 | **KIX T1 → Kansai-airport Station** | Walk via the Terminal 1 2F / AEROPLAZA direct connection |
 | ~11:15–12:30 | **HARUKA KIX → Kyoto Station** | About 75 min. 11:15 is a target; take the next train if immigration runs long. Official one-way adult baseline ¥2,200 |
-| 12:35–12:50 | **Kyoto Station → Gojo Station** | Kyoto Subway Karasuma Line, one stop |
-| 12:50–13:05 | **Gojo Station → AMANEK** | Walk; no taxi |
+| 12:35–13:00 | **Kyoto Station → Kawaramachi Gojo** | Default: Kyoto City Bus **4 / 5 / 80 / 205**, whichever is convenient; hotel official access says about 10 min onboard. Allow extra wait/traffic time. Standard flat-zone bus fare ¥230 |
+| 13:00–13:03 | **Kawaramachi Gojo → AMANEK** | Hotel official access says about 1 min walk |
 | 13:05–13:25 | AMANEK bag drop / ask about early check-in | Confirmed check-in remains at 15:00 |
 | 15:00 | Check-in / short rest | Confirmed hotel |
 | 16:30–17:30 | **Kura Sushi Kyoto Teramachi** | **RESERVE NOW**; official web/app |
@@ -334,6 +334,9 @@ Use **pay-as-you-go ICOCA / compatible IC transit payment** for local transport.
 - Physical ICOCA standard purchase is typically **¥2,000**, including **¥1,500 usable balance + ¥500 deposit**.
 - If a compatible iPhone/Apple Watch setup is already practical, mobile IC can reduce card handling.
 - Keep some yen cash because physical IC purchase/top-up situations can still require cash.
+- Kyoto City Bus flat-fare-area rides are currently **¥230/adult**. The **Subway & Bus 1-Day Pass is ¥1,100/adult**; the old bus-only 1-day pass has been discontinued.
+- For this itinerary the ¥1,100 day pass is not expected to pay off: 9/13 needs only the Kyoto Station→Kawaramachi Gojo bus, 9/14 uses only a small number of city-bus rides, and 9/15 relies mainly on **Keihan**, which is outside the Kyoto City Subway & Bus pass.
+- Ordinary automatic IC transfer discounts ended in 2023. Kyoto now has an ICOCA/PiTaPa points program, but it is not worth optimizing around for this short tourist itinerary.
 
 ## Do not pre-buy a broad Kansai transport pass
 
@@ -355,8 +358,10 @@ JR-WEST IC guide: https://www.westjr.co.jp/travel-information/en/train-usage-gui
 
 1. KIX immigration/baggage.
 2. JR **HARUKA → Kyoto Station**.
-3. Kyoto Subway Karasuma Line **Kyoto → Gojo**.
-4. Walk to AMANEK.
+3. Default with luggage: Kyoto City Bus **4 / 5 / 80 / 205 → Kawaramachi Gojo**.
+4. Walk about **1 minute** to AMANEK.
+
+Hotel-official fallback if buses are badly delayed/crowded: Kyoto Subway Karasuma Line **Kyoto → Gojo** (1 stop), then about **10 minutes on foot**.
 
 No taxi. HARUKA keeps transfers low on the rainy luggage day.
 
