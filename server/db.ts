@@ -259,7 +259,16 @@ export function getTrip(tripId: string) {
     WHERE p.trip_id = ? GROUP BY p.id ORDER BY vote_score DESC, p.created_at
   `).all(tripId);
   const rawPacking = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at').all(tripId) as any[];
-  const packing_bags = db.prepare('SELECT * FROM packing_bags WHERE trip_id = ? ORDER BY created_at').all(tripId);
+  const packing_bags = db.prepare(`
+    SELECT * FROM packing_bags WHERE trip_id = ?
+    ORDER BY CASE name
+      WHEN '여권지갑' THEN 10
+      WHEN '기내용 백팩' THEN 20
+      WHEN '기내용 캐리어' THEN 30
+      WHEN '체크인 캐리어' THEN 40
+      WHEN '데일리 보조가방' THEN 50
+      ELSE 90 END, created_at
+  `).all(tripId);
   const rawChecklist = db.prepare('SELECT * FROM trip_checklist_items WHERE trip_id = ? ORDER BY sort_order, created_at').all(tripId) as any[];
   const checklistPackingLinks = db.prepare(`
     SELECT cpl.* FROM checklist_packing_links cpl
@@ -403,11 +412,13 @@ function normalizeKyotoTrip(tripId: string) {
 function seedPackingTemplate(tripId: string) {
   const bagRows = db.prepare('SELECT * FROM packing_bags WHERE trip_id = ?').all(tripId) as any[];
   const bagByName = new Map(bagRows.map((bag) => [bag.name, bag.id]));
+  const hadCabinSuitcase = bagByName.has('기내용 캐리어');
   const bagStmt = db.prepare('INSERT INTO packing_bags (id, trip_id, name, kind, owner, weight_limit, notes) VALUES (?, ?, ?, ?, ?, ?, ?)');
   const bags = [
     ['여권지갑', 'documents', 'Oosu', null, '여권·카드·바우처 같이 즉시 꺼내는 서류류'],
     ['기내용 백팩', 'cabin', 'Oosu', 10, 'ICN → KIX / KIX → ICN 기내 수하물 10kg 기준'],
-    ['체크인 캐리어', 'checked', 'Oosu', 15, '출국편 15kg. 귀국편 위탁수하물 0kg이므로 귀국 전 재배치 필요'],
+    ['기내용 캐리어', 'cabin-suitcase', 'Oosu', 10, '이번 여행 메인 캐리어. 체크인하지 않고 기내 반입 기준으로 구성'],
+    ['체크인 캐리어', 'checked', 'Oosu', 15, '이번 여행에서는 사용하지 않는 예비 가방. 항목을 배정하지 않음'],
     ['데일리 보조가방', 'daily', 'Oosu', null, '현지 이동용 크로스백/보조가방'],
   ] as const;
   for (const [name, kind, owner, limit, notes] of bags) {
@@ -415,6 +426,13 @@ function seedPackingTemplate(tripId: string) {
     const bagId = id();
     bagStmt.run(bagId, tripId, name, kind, owner, limit, notes);
     bagByName.set(name, bagId);
+  }
+
+  // One-time upgrade for databases created before the cabin-suitcase split.
+  // Once the new bag exists, later manual assignments are left untouched.
+  if (!hadCabinSuitcase && bagByName.get('기내용 캐리어') && bagByName.get('체크인 캐리어')) {
+    db.prepare('UPDATE packing_items SET bag_id = ? WHERE trip_id = ? AND bag_id = ?')
+      .run(bagByName.get('기내용 캐리어'), tripId, bagByName.get('체크인 캐리어'));
   }
 
   const existing = new Set((db.prepare('SELECT label FROM packing_items WHERE trip_id = ?').all(tripId) as any[]).map((item) => item.label));
@@ -434,7 +452,7 @@ function seedPackingTemplate(tripId: string) {
     ['헤드폰 / 이어폰', '전자기기', '기내용 백팩', '비행 및 이동'],
     ['휴대폰 충전기', '전자기기', '기내용 백팩', '매일 사용하는 충전기'],
     ['보조배터리', '전자기기', '기내용 백팩', '배터리는 위탁보다 기내 휴대'],
-    ['멀티어댑터', '전자기기', '체크인 캐리어', '숙소 충전 환경 대비'],
+    ['멀티어댑터', '전자기기', '기내용 캐리어', '숙소 충전 환경 대비'],
     ['태블릿 / ebook 리더', '전자기기', '기내용 백팩', '선택 항목'],
     ['노트북', '전자기기', '기내용 백팩', '필요한 경우만'],
     ['짐벌 / 카메라', '전자기기', '기내용 백팩', '촬영 계획이 있을 때'],
@@ -442,26 +460,26 @@ function seedPackingTemplate(tripId: string) {
     ['비행용 슬리퍼', '기내', '기내용 백팩', '장거리 대기·기내 편의'],
     ['상비약 / 영양제', '건강', '기내용 백팩', '필수 복용분은 기내 휴대'],
     ['설사약 / 유산균', '건강', '기내용 백팩', '여행 중 위장 컨디션 대비'],
-    ['속옷', '의류 · 신발', '체크인 캐리어', '여행 일수 + 여유분'],
-    ['양말', '의류 · 신발', '체크인 캐리어', '도보 일정 교체용'],
-    ['잠옷', '의류 · 신발', '체크인 캐리어', '숙소용'],
-    ['가볍고 통기성 좋은 상의', '의류 · 신발', '체크인 캐리어', '9월 더위와 도보 일정'],
-    ['편한 바지', '의류 · 신발', '체크인 캐리어', '장시간 도보에 적합'],
-    ['얇은 재킷 / 가디건', '의류 · 신발', '체크인 캐리어', '냉방·저녁 시간 대비'],
+    ['속옷', '의류 · 신발', '기내용 캐리어', '여행 일수 + 여유분'],
+    ['양말', '의류 · 신발', '기내용 캐리어', '도보 일정 교체용'],
+    ['잠옷', '의류 · 신발', '기내용 캐리어', '숙소용'],
+    ['가볍고 통기성 좋은 상의', '의류 · 신발', '기내용 캐리어', '9월 더위와 도보 일정'],
+    ['편한 바지', '의류 · 신발', '기내용 캐리어', '장시간 도보에 적합'],
+    ['얇은 재킷 / 가디건', '의류 · 신발', '기내용 캐리어', '냉방·저녁 시간 대비'],
     ['편한 워킹화', '의류 · 신발', '데일리 보조가방', '교토·오사카 도보 중심 일정'],
-    ['여벌 신발 / 샌들', '의류 · 신발', '체크인 캐리어', '비 또는 발 피로 대비'],
+    ['여벌 신발 / 샌들', '의류 · 신발', '기내용 캐리어', '비 또는 발 피로 대비'],
     ['선글라스 / 모자', '액세서리', '데일리 보조가방', '낮 시간 햇빛 대비'],
     ['접이식 우산', '액세서리', '데일리 보조가방', '예보 강수 대비'],
-    ['지퍼백', '생활', '체크인 캐리어', '젖은 물건·액체류 분리'],
-    ['빨래망 / 소량 세제', '생활', '체크인 캐리어', '여행 중 간단 세탁'],
-    ['치약 · 칫솔', '세면도구', '체크인 캐리어', '기본 세면'],
-    ['클렌징용품', '세면도구', '체크인 캐리어', '개인 루틴'],
-    ['샴푸 · 린스', '세면도구', '체크인 캐리어', '숙소 어메니티 대체용'],
-    ['바디워시 / 샤워볼', '세면도구', '체크인 캐리어', '개인 선호 시'],
-    ['면도기', '세면도구', '체크인 캐리어', '그루밍'],
+    ['지퍼백', '생활', '기내용 캐리어', '젖은 물건·액체류 분리'],
+    ['빨래망 / 소량 세제', '생활', '기내용 캐리어', '여행 중 간단 세탁'],
+    ['치약 · 칫솔', '세면도구', '기내용 캐리어', '기본 세면'],
+    ['클렌징용품', '세면도구', '기내용 캐리어', '개인 루틴'],
+    ['샴푸 · 린스', '세면도구', '기내용 캐리어', '숙소 어메니티 대체용'],
+    ['바디워시 / 샤워볼', '세면도구', '기내용 캐리어', '개인 선호 시'],
+    ['면도기', '세면도구', '기내용 캐리어', '그루밍'],
     ['선스크린', '세면도구', '데일리 보조가방', '낮 시간 야외 이동'],
-    ['향수 / 왁스', '세면도구', '체크인 캐리어', '선택 항목'],
-    ['손톱깎이 / 면봉', '세면도구', '체크인 캐리어', '위탁 수하물에 배치'],
+    ['향수 / 왁스', '세면도구', '기내용 캐리어', '선택 항목'],
+    ['손톱깎이 / 면봉', '세면도구', '기내용 캐리어', '기내 반입 규정에 맞는 품목만 휴대'],
   ] as const;
   for (const [label, category, bagName, reason] of template) {
     if (existing.has(label)) continue;

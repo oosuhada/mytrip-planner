@@ -200,7 +200,7 @@ app.post('/api/trips/:id/packing/generate', (req, res) => {
   const existing = new Set((db.prepare('SELECT label FROM packing_items WHERE trip_id = ?').all(req.params.id) as any[]).map((x) => x.label));
   for (const item of suggestions) {
     if (existing.has(item.label)) continue;
-    const bagName = item.category === '여행' ? '여권지갑' : item.category === '생활' ? '데일리 보조가방' : item.category === '코디' || item.category === '의류' || item.category === '신발' ? '체크인 캐리어' : '기내용 백팩';
+    const bagName = item.category === '여행' ? '여권지갑' : item.category === '생활' ? '데일리 보조가방' : item.category === '코디' || item.category === '의류' || item.category === '신발' ? '기내용 캐리어' : '기내용 백팩';
     stmt.run(id(), req.params.id, item.label, item.category, req.body.owner || 'Oosu', bagByName.get(bagName) || null, 'weather-ai', item.reason);
   }
   emitTrip(req.params.id);

@@ -385,6 +385,37 @@ WHERE id IN (SELECT event_id FROM meal_slots WHERE selected_restaurant_id IS NOT
 -- Packing/preparation items missing from the generic template. Use only columns
 -- that exist in the oldest production schema; app startup adds richer columns.
 -- Preserve checked state on re-run.
+INSERT INTO packing_bags (id, trip_id, name, kind, owner, weight_limit, notes)
+SELECT
+  'plan-bag-cabin-suitcase',
+  (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1),
+  '기내용 캐리어', 'cabin-suitcase', 'Oosu', 10,
+  '이번 여행 메인 캐리어. 체크인하지 않고 기내 반입 기준으로 구성'
+WHERE NOT EXISTS (
+  SELECT 1 FROM packing_bags
+  WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+    AND name='기내용 캐리어'
+);
+
+UPDATE packing_bags
+SET notes='이번 여행에서는 사용하지 않는 예비 가방. 항목을 배정하지 않음'
+WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+  AND name='체크인 캐리어';
+
+UPDATE packing_items
+SET bag_id=(
+  SELECT id FROM packing_bags
+  WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+    AND name='기내용 캐리어'
+  ORDER BY created_at LIMIT 1
+)
+WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+  AND bag_id IN (
+    SELECT id FROM packing_bags
+    WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+      AND name='체크인 캐리어'
+  );
+
 INSERT INTO packing_items (id, trip_id, label, category, owner, checked, reason)
 VALUES
 ('plan-pack-type-a', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '일본 Type-A 돼지코 2개+', '전자기기', '공용', 0, '일본 100V Type A. 100–240V 지원 충전기에 사용'),
@@ -397,6 +428,26 @@ VALUES
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, label=excluded.label, category=excluded.category,
   owner=excluded.owner, reason=excluded.reason;
+
+UPDATE packing_items
+SET bag_id=(
+  SELECT id FROM packing_bags
+  WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+    AND name='기내용 백팩'
+  ORDER BY created_at LIMIT 1
+)
+WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+  AND id IN ('plan-pack-blister','plan-pack-waterproof-pouch','plan-pack-sony-mirrorless','plan-pack-neck-pillow');
+
+UPDATE packing_items
+SET bag_id=(
+  SELECT id FROM packing_bags
+  WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+    AND name='기내용 캐리어'
+  ORDER BY created_at LIMIT 1
+)
+WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1)
+  AND id IN ('plan-pack-type-a','plan-pack-rain-shell','plan-pack-tattoo-leg-cover');
 
 -- Link departure preparation and the bag checklist. Toggling either screen will
 -- update the same underlying completion state through the API.

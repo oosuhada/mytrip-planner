@@ -8,7 +8,7 @@ import {
   Plus, Printer, Route, Search, Send, Sparkles, Trash2, Users, Utensils, Vote, X,
 } from 'lucide-react';
 import { api, del, patch, post } from './api';
-import type { PackingItem, Place, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay } from './types';
+import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay } from './types';
 
 const socket = io({ autoConnect: true });
 
@@ -383,14 +383,69 @@ function VotePanel({ trip, plannerName, reload }: { trip: Trip; plannerName: str
   const [scheduleFor, setScheduleFor] = useState<Place | null>(null);
   const [schedule, setSchedule] = useState({ date: trip.start_date, start_time: '10:00' });
   const [filter, setFilter] = useState<'all'|'restaurant'|'place'>('all');
+  const [viewMode, setViewMode] = useState<'schedule'|'theme'>('schedule');
   const restaurantsById = useMemo(() => new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const)), [trip.restaurants]);
-  const visiblePlaces = trip.places.filter((place) => filter === 'all' || (filter === 'restaurant' ? Boolean(place.restaurant_id) : !place.restaurant_id));
+  const candidateEntries = useMemo(() => {
+    const entries: Array<{ place: Place; restaurant: Restaurant | null; mealSlots: MealSlot[]; date: string | null; orderKey: string; theme: string; context: string }> = [];
+    for (const place of trip.places) {
+      const restaurant = place.restaurant_id ? restaurantsById.get(place.restaurant_id) || null : null;
+      if (restaurant) {
+        const slots = (trip.meal_slots || []).filter((slot) => slot.option_ids.includes(restaurant.id));
+        const dates = [...new Set(slots.map((slot) => slot.date))];
+        if (!dates.length) {
+          entries.push({ place, restaurant, mealSlots: [], date: null, orderKey: '99:99|999', theme: '식당', context: '식사 일정 미정' });
+          continue;
+        }
+        for (const date of dates) {
+          const dateSlots = slots.filter((slot) => slot.date === date).sort((a, b) => `${a.time || '99:99'}|${a.sort_order}`.localeCompare(`${b.time || '99:99'}|${b.sort_order}`));
+          entries.push({
+            place, restaurant, mealSlots: dateSlots, date,
+            orderKey: `${dateSlots[0]?.time || '99:99'}|${String(dateSlots[0]?.sort_order || 999).padStart(3, '0')}`,
+            theme: '식당',
+            context: dateSlots.map((slot) => `${slot.time || ''} ${slot.label}`.trim()).join(' · '),
+          });
+        }
+        continue;
+      }
+
+      const relatedEvents = trip.events.filter((event) => candidatePlaceMatchesEvent(place, event));
+      const dates = [...new Set(relatedEvents.map((event) => event.date))];
+      if (!dates.length) {
+        entries.push({ place, restaurant: null, mealSlots: [], date: null, orderKey: '99:99|999', theme: candidateThemeLabel(place), context: '아직 일정에 넣지 않은 후보' });
+        continue;
+      }
+      for (const date of dates) {
+        const events = relatedEvents.filter((event) => event.date === date).sort((a, b) => compareDayEvents(a, b, relatedEvents));
+        const first = events[0];
+        entries.push({
+          place, restaurant: null, mealSlots: [], date,
+          orderKey: `${first?.start_time || '99:99'}|${String(first?.sort_order || 999).padStart(3, '0')}`,
+          theme: candidateThemeLabel(place),
+          context: events.map((event) => `${event.start_time || ''} ${event.title}`.trim()).join(' · '),
+        });
+      }
+    }
+    return entries;
+  }, [restaurantsById, trip.events, trip.meal_slots, trip.places]);
+  const filteredEntries = candidateEntries.filter((entry) => filter === 'all' || (filter === 'restaurant' ? Boolean(entry.restaurant) : !entry.restaurant));
+  const dateSections = useMemo(() => {
+    const dates = dateRange(trip.start_date, trip.end_date);
+    const result = dates.map((date, index) => ({ date, dayNumber: index + 1, entries: filteredEntries.filter((entry) => entry.date === date).sort((a, b) => a.orderKey.localeCompare(b.orderKey) || a.place.name.localeCompare(b.place.name)) })).filter((section) => section.entries.length);
+    const unscheduled = filteredEntries.filter((entry) => !entry.date).sort((a, b) => a.theme.localeCompare(b.theme) || a.place.name.localeCompare(b.place.name));
+    if (unscheduled.length) result.push({ date: '', dayNumber: 0, entries: unscheduled });
+    return result;
+  }, [filteredEntries, trip.start_date, trip.end_date]);
   async function vote(place: Place, value: 1|-1) { await post(`/api/places/${place.id}/vote`, { voter: plannerName || 'friend', value }); reload(); }
   async function addSchedule() { if (!scheduleFor) return; await post(`/api/places/${scheduleFor.id}/schedule`, schedule); setScheduleFor(null); reload(); }
   async function selectMeal(slotId: string, restaurantId: string) { await patch(`/api/meal-slots/${slotId}/select`, { restaurant_id: restaurantId }); reload(); }
-  return <div className="panel-page"><div className="page-title"><div><p className="eyebrow">SHARED SHORTLIST</p><h2>같이 갈 곳 고르기</h2><p>각자 이름으로 투표하고, 정해진 장소는 바로 일정에 넣을 수 있습니다.</p></div><div className="people-stack">{trip.participants.map((p) => <span key={p.id}>{p.name.slice(0,1)}</span>)}</div></div>
-    <div className="vote-filters"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>전체 {trip.places.length}</button><button className={filter==='restaurant'?'active':''} onClick={()=>setFilter('restaurant')}>식당 {trip.places.filter((place)=>place.restaurant_id).length}</button><button className={filter==='place'?'active':''} onClick={()=>setFilter('place')}>관광 · 장소 {trip.places.filter((place)=>!place.restaurant_id).length}</button></div>
-    <div className="vote-grid">{visiblePlaces.map((p, index) => { const restaurant = p.restaurant_id ? restaurantsById.get(p.restaurant_id) : null; const mealSlots = restaurant ? (trip.meal_slots || []).filter((slot) => slot.option_ids.includes(restaurant.id)) : []; const mapUrl = restaurant?.google_maps_url || googleMapsPlaceSearchUrl(p); return <article className={`vote-card ${restaurant ? 'restaurant-vote-card' : ''}`} key={p.id}>{restaurant && <RestaurantPhoto url={restaurant.image_url} kind="vote"/>}<div className="rank">{String(index+1).padStart(2,'0')}</div><div className="vote-body"><div className="idea-top"><span>{restaurant ? 'restaurant' : p.category}</span><small>{p.saved_by ? `${p.saved_by} saved` : 'saved'}</small></div><h3>{p.name}</h3><p>{restaurant ? `${restaurant.price_range || ''} · ${restaurant.hours || ''}` : (p.notes || p.address)}</p>{restaurant?.dietary_notes && <div className="vote-diet">{restaurant.dietary_notes}</div>}{mealSlots.length > 0 && <div className="vote-meal-slots">{mealSlots.map((slot)=><div key={slot.id}><span>{formatMonthDay(slot.date)} {slot.label}</span><button disabled={slot.selected_restaurant_id===restaurant?.id} onClick={()=>restaurant&&selectMeal(slot.id,restaurant.id)}>{slot.selected_restaurant_id===restaurant?.id?'선택됨':'이 식당 선택'}</button></div>)}</div>}<div className="vote-links">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={13}/>Google Maps</a>}{restaurant?.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴 · 사진</a>}{restaurant?.reservation_url && <a href={restaurant.reservation_url} target="_blank" rel="noreferrer"><ExternalLink size={13}/>공식</a>}</div><div className="vote-actions"><button onClick={() => vote(p, 1)}><Heart size={15}/><strong>{p.vote_score}</strong></button>{!restaurant && <button onClick={() => setScheduleFor(p)}><CalendarDays size={15}/> 일정에 넣기</button>}{!restaurant && <button className="ghost-icon" onClick={async () => { await del(`/api/places/${p.id}`); reload(); }}><Trash2 size={14}/></button>}</div></div></article>; })}</div>
+  function renderCandidate(entry: typeof candidateEntries[number], index: number) {
+    const { place: p, restaurant, mealSlots } = entry;
+    const mapUrl = restaurant?.google_maps_url || googleMapsPlaceSearchUrl(p);
+    return <article className={`vote-card ${restaurant ? 'restaurant-vote-card' : ''}`} key={`${p.id}-${entry.date || 'flex'}`}>{restaurant && <RestaurantPhoto url={restaurant.image_url} kind="vote"/>}<div className="rank">{String(index+1).padStart(2,'0')}</div><div className="vote-body"><div className="candidate-context"><CalendarDays size={12}/><span>{entry.context}</span></div><div className="idea-top"><span>{restaurant ? 'restaurant' : p.category}</span><small>{p.saved_by ? `${p.saved_by} saved` : 'saved'}</small></div><h3>{p.name}</h3><p>{restaurant ? `${restaurant.price_range || ''} · ${restaurant.hours || ''}` : (p.notes || p.address)}</p>{restaurant?.dietary_notes && <div className="vote-diet">{restaurant.dietary_notes}</div>}{mealSlots.length > 0 && <div className="vote-meal-slots">{mealSlots.map((slot)=><div key={slot.id}><span>{formatMonthDay(slot.date)} {slot.label}</span><button disabled={slot.selected_restaurant_id===restaurant?.id} onClick={()=>restaurant&&selectMeal(slot.id,restaurant.id)}>{slot.selected_restaurant_id===restaurant?.id?'선택됨':'이 식당 선택'}</button></div>)}</div>}<div className="vote-links">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={13}/>Google Maps</a>}{restaurant?.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴 · 사진</a>}{restaurant?.reservation_url && <a href={restaurant.reservation_url} target="_blank" rel="noreferrer"><ExternalLink size={13}/>공식</a>}</div><div className="vote-actions"><button onClick={() => vote(p, 1)}><Heart size={15}/><strong>{p.vote_score}</strong></button>{!restaurant && <button onClick={() => setScheduleFor(p)}><CalendarDays size={15}/> 일정에 넣기</button>}{!restaurant && <button className="ghost-icon" onClick={async () => { await del(`/api/places/${p.id}`); reload(); }}><Trash2 size={14}/></button>}</div></div></article>;
+  }
+  return <div className="panel-page vote-page"><div className="page-title"><div><p className="eyebrow">SHARED SHORTLIST</p><h2>날짜별로 후보 비교하기</h2><p>날짜를 먼저 보고, 그 안에서 일정 순서 또는 테마별로 후보를 비교하고 투표할 수 있습니다.</p></div><div className="people-stack">{trip.participants.map((p) => <span key={p.id}>{p.name.slice(0,1)}</span>)}</div></div>
+    <div className="vote-toolbar"><div className="vote-filters"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>전체 {trip.places.length}</button><button className={filter==='restaurant'?'active':''} onClick={()=>setFilter('restaurant')}>식당 {trip.places.filter((place)=>place.restaurant_id).length}</button><button className={filter==='place'?'active':''} onClick={()=>setFilter('place')}>관광 · 장소 {trip.places.filter((place)=>!place.restaurant_id).length}</button></div><div className="vote-view-toggle"><button className={viewMode==='schedule'?'active':''} onClick={()=>setViewMode('schedule')}><CalendarDays size={13}/> 일정 순서</button><button className={viewMode==='theme'?'active':''} onClick={()=>setViewMode('theme')}><Sparkles size={13}/> 테마별</button></div></div>
+    <div className="vote-date-sections">{dateSections.map((section) => <section className="vote-date-section" key={section.date || 'unscheduled'}><header><div><span>{section.date ? `DAY ${section.dayNumber}` : 'FLEX'}</span><h3>{section.date ? formatDay(section.date) : '날짜 미정 후보'}</h3></div><b>{section.entries.length}개 후보</b></header>{viewMode === 'schedule' ? <div className="vote-grid">{section.entries.map((entry, index) => renderCandidate(entry, index))}</div> : <div className="vote-theme-groups">{[...new Set(section.entries.map((entry) => entry.theme))].map((theme) => { const themeEntries = section.entries.filter((entry) => entry.theme === theme); return <section className="vote-theme-group" key={theme}><h4>{theme}<span>{themeEntries.length}</span></h4><div className="vote-grid">{themeEntries.map((entry, index) => renderCandidate(entry, index))}</div></section>; })}</div>}</section>)}</div>
     {scheduleFor && <div className="modal-backdrop" onMouseDown={() => setScheduleFor(null)}><div className="modal small-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ADD TO DAY PLAN</p><h2>{scheduleFor.name}</h2></div><button className="icon-btn" onClick={()=>setScheduleFor(null)}><X/></button></div><div className="form-row"><label>날짜<select value={schedule.date} onChange={(e)=>setSchedule({...schedule,date:e.target.value})}>{dateRange(trip.start_date,trip.end_date).map(d=><option key={d}>{d}</option>)}</select></label><label>시간<input type="time" value={schedule.start_time} onChange={(e)=>setSchedule({...schedule,start_time:e.target.value})}/></label></div><button className="primary full" onClick={addSchedule}>일정에 추가</button></div></div>}
   </div>;
 }
@@ -433,11 +488,11 @@ function PackingPanel({ trip, weather, reload }: { trip: Trip; weather: WeatherD
     <div className="packing-top"><div className="outfit-card"><div><Sparkles/><span>코디 추천</span></div><h3>{max >= 27 ? '통기성 좋은 옷 + 얇은 레이어' : '레이어 중심으로 준비'}</h3><p>Oosu · Domenic 모두 도보가 많은 일정이므로 워킹화와 가벼운 상의를 기본으로 하고, 비 예보가 있는 날은 젖어도 관리하기 쉬운 하의와 접이식 우산을 우선합니다.</p><div className="segmented"><button className={gender==='male'?'active':''} onClick={()=>setGender('male')}>남성</button><button className={gender==='female'?'active':''} onClick={()=>setGender('female')}>여성</button><button className={gender==='neutral'?'active':''} onClick={()=>setGender('neutral')}>중립</button></div><button className="primary" onClick={generate} disabled={generating}><Sparkles size={15}/>{generating?'생성 중…':'날씨 기반 항목 추가'}</button></div>
       <div className="weather-days outfit-days">{weather.map((w)=><div key={w.date}><span>{formatDay(w.date)}</span><b>{weatherIcon(w.code)} {Math.round(w.max)}° / {Math.round(w.min)}°</b><small>{weatherLabel(w.code)} · 강수 {w.rain}%</small><em>{outfitForWeather(w)}</em></div>)}</div></div>
 
-    <div className="baggage-rule"><Luggage size={18}/><div><strong>이번 항공 수하물 기준</strong><span>Oosu · Domenic 각각 출국: 기내 10kg + 위탁 15kg / 귀국: 기내 10kg + 위탁 0kg. 귀국 전 체크인 캐리어 물건을 기내용/배송/추가수하물로 재배치해야 합니다.</span></div></div>
+    <div className="baggage-rule"><Luggage size={18}/><div><strong>이번 여행 가방 운영</strong><span>이번 여행 짐은 기내용 캐리어 + 기내용 백팩에만 배정합니다. 출국편의 위탁 허용량이 있더라도 체크인 캐리어는 비워두고 사용하지 않습니다.</span></div></div>
 
     <section className="bag-planner print-section"><div className="packing-section-head"><div><p className="eyebrow">BAG PLAN</p><h3>가방별로 나눠 담기</h3></div><button className="secondary no-print" onClick={()=>setAddingBag(!addingBag)}><Plus size={14}/> 가방 추가</button></div>
       {addingBag && <div className="inline-add no-print"><input placeholder="가방 이름" value={bagForm.name} onChange={(e)=>setBagForm({...bagForm,name:e.target.value})}/><input type="number" min="0" step="0.1" placeholder="제한 kg" value={bagForm.weight_limit} onChange={(e)=>setBagForm({...bagForm,weight_limit:e.target.value})}/><button className="primary" onClick={addBag}>추가</button></div>}
-      <div className="bag-grid">{(trip.packing_bags || []).map((bag)=>{const weight=bagWeight(bag.id);const ratio=bag.weight_limit ? Math.min(100,(weight/bag.weight_limit)*100) : 0;return <article className="bag-card" key={bag.id}><div className="bag-card-head"><div><Luggage size={18}/><span><strong>{bag.name}</strong><small>{bag.owner || '공용'}</small></span></div><b>{weight.toFixed(1)}{bag.weight_limit ? ` / ${bag.weight_limit}` : ''} kg</b></div>{bag.weight_limit ? <div className={`weight-meter ${weight>bag.weight_limit?'over':''}`}><i style={{width:`${ratio}%`}}/></div>:null}<p>{bag.notes}</p><small>{trip.packing.filter((item)=>item.bag_id===bag.id).length}개 항목</small></article>})}</div>
+      <div className="bag-grid">{(trip.packing_bags || []).map((bag)=>{const weight=bagWeight(bag.id);const count=trip.packing.filter((item)=>item.bag_id===bag.id).length;const ratio=bag.weight_limit ? Math.min(100,(weight/bag.weight_limit)*100) : 0;return <article className={`bag-card ${count===0?'empty':''}`} key={bag.id}><div className="bag-card-head"><div><Luggage size={18}/><span><strong>{bag.name}</strong><small>{bag.owner || '공용'}</small></span></div><b>{weight.toFixed(1)}{bag.weight_limit ? ` / ${bag.weight_limit}` : ''} kg</b></div>{bag.weight_limit ? <div className={`weight-meter ${weight>bag.weight_limit?'over':''}`}><i style={{width:`${ratio}%`}}/></div>:null}<p>{bag.notes}</p><small>{count}개 항목{bag.name==='체크인 캐리어'&&count===0 ? ' · 비워둠' : ''}</small></article>})}</div>
     </section>
 
     <section className="packing-checklist print-section"><div className="packing-section-head"><div><p className="eyebrow">CHECKLIST</p><h3>준비물 체크리스트</h3></div></div>
@@ -500,6 +555,9 @@ function subtractMinute(value:string){const [h,m]=value.split(':').map(Number);c
 function eventDestination(event:TripEvent){if(event.address)return event.address;const parts=(event.location||'').split(/\s*→\s*/).map((part)=>part.trim()).filter(Boolean);if(parts.length>1)return parts[parts.length-1];return event.location||(event.lat&&event.lng?`${event.lat},${event.lng}`:'');}
 function googleMapsEventUrl(event:TripEvent){const parts=(event.location||'').split(/\s*→\s*/).map((part)=>part.trim()).filter(Boolean);if(event.kind!=='flight'&&parts.length>1){const origin=parts[0],destination=parts[parts.length-1];const transport=`${event.kind} ${String(event.meta?.transport||'')}`.toLowerCase();const travelmode=transport.includes('train')||transport.includes('metro')||transport.includes('subway')||transport.includes('bus')||transport.includes('haruka')||transport.includes('keihan')||transport.includes('nankai')?'transit':'walking';return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=${travelmode}`;}const query=event.address||eventDestination(event);return query?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`:'';}
 function googleMapsPlaceSearchUrl(place:Place){const query=place.address||place.name;return query?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`:'';}
+function candidatePlaceMatchesEvent(place:Place,event:TripEvent){const name=normalizeCandidateText(place.name);if(!name)return false;const fields=[event.title,event.location,event.address].map((value)=>normalizeCandidateText(value||'')).filter(Boolean);if(fields.some((field)=>field.includes(name)||(name.length>=6&&name.includes(field))))return true;const address=normalizeCandidateText(place.address||'');return Boolean(address&&fields.some((field)=>field===address||(address.length>=10&&field.includes(address))));}
+function normalizeCandidateText(value:string){return value.toLowerCase().replace(/[·’'().,\-_/]/g,' ').replace(/\s+/g,' ').trim();}
+function candidateThemeLabel(place:Place){const category=(place.category||'기타').toLowerCase();const labels:Record<string,string>={nature:'Nature · 자연',shrine:'Shrine · 신사',temple:'Temple · 사찰',food:'Food · 먹거리',neighborhood:'Neighborhood · 동네',landmark:'Landmark · 명소',activity:'Activity · 체험',place:'기타 장소'};return labels[category]||place.category||'기타 장소';}
 function weatherIcon(code:number){if(code>=95)return '⛈';if(code>=61)return '🌧';if(code>=51)return '🌦';if(code>=45)return '🌫';if(code>=2)return '⛅';return '☀️';}
 function weatherLabel(code:number){if(code>=95)return '뇌우';if(code>=80)return '소나기';if(code>=61)return '비';if(code>=51)return '이슬비';if(code>=45)return '안개';if(code>=3)return '흐림';if(code>=1)return '구름 조금';return '맑음';}
 function outfitForWeather(day:WeatherDay){if(day.rain>=60)return '통기성 상의 · 마르기 쉬운 하의 · 워킹화 · 우산';if(day.max>=29)return '반팔 · 얇은 하의 · 선스크린 · 모자';if(day.min<=20)return '반팔 + 얇은 셔츠/가디건 · 편한 팬츠';return '가벼운 상의 · 편한 팬츠 · 워킹화';}
