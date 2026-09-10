@@ -39,11 +39,13 @@ export async function generateTripIdeas(input: {
   prompt: string;
   weather?: string;
   existing?: string[];
+  context?: unknown;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }) {
   if (aiEnabled()) {
     try {
       const result = await callOpenAI(
-        `You are a concise collaborative trip-planning copilot. Suggest practical ideas grounded in the supplied destination, dates, weather and existing places. Return strict JSON only: {"message":"...","ideas":[{"name":"...","category":"...","reason":"...","bestTime":"...","area":"..."}]}. Give 3-6 ideas. Avoid claiming live opening hours unless provided.`,
+        `You are MyTrip Assistant, the persistent assistant for one specific trip. The supplied trip context is the source of truth for confirmed bookings, itinerary times, selected meal candidates, votes, transport decisions, packing/checklist state, traveler food constraints and researched alternatives. Answer the user's question directly and take the whole trip into account, including conflicts between days and walking/rain constraints. Do not invent live availability, current opening hours or prices beyond what the context explicitly supplies. If a user asks for a recommendation, prefer researched candidates already in the context and explain where they fit. Return strict JSON only: {"message":"...","ideas":[{"name":"...","category":"...","reason":"...","bestTime":"...","area":"..."}]}. ideas may be an empty array when the question is informational; otherwise return at most 6 actionable candidate ideas.`,
         JSON.stringify(input),
       );
       const parsed = JSON.parse(stripCodeFence(result));
@@ -131,7 +133,13 @@ function fallbackParse(raw: string): { parser: string; events: ParsedEvent[]; su
   };
 }
 
-function fallbackIdeas(input: { destination: string; prompt: string }) {
+function fallbackIdeas(input: { destination: string; prompt: string; context?: any }) {
+  if (input.context) {
+    const incomplete = Array.isArray(input.context.checklist) ? input.context.checklist.filter((item: any) => item.status !== 'DONE').slice(0, 5) : [];
+    if (/준비|체크|해야|남았/i.test(input.prompt) && incomplete.length) {
+      return { provider: 'local', message: `아직 완료되지 않은 준비는 ${incomplete.map((item: any) => item.title).join(', ')} 등이 있습니다.`, ideas: [] };
+    }
+  }
   const kyoto = /kyoto|교토/i.test(input.destination);
   const ideas = kyoto ? [
     { name: 'Philosopher’s Path', category: 'walk', reason: '아침 산책용으로 일정 밀도가 낮고 동선 조정이 쉽습니다.', bestTime: 'morning', area: 'Higashiyama' },

@@ -224,6 +224,19 @@ CREATE TABLE IF NOT EXISTS checklist_packing_links (
   packing_id TEXT NOT NULL REFERENCES packing_items(id) ON DELETE CASCADE,
   PRIMARY KEY(checklist_id, packing_id)
 );
+
+CREATE TABLE IF NOT EXISTS place_research (
+  place_id TEXT PRIMARY KEY REFERENCES places(id) ON DELETE CASCADE,
+  region TEXT NOT NULL,
+  suggested_dates_json TEXT NOT NULL DEFAULT '[]',
+  best_time TEXT,
+  area TEXT,
+  source_url TEXT,
+  research_note TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `);
 
 ensureColumn('packing_items', 'bag_id', 'TEXT');
@@ -313,7 +326,24 @@ export function getTrip(tripId: string) {
     optionIdsBySlot.set(option.meal_slot_id, list);
   }
   const richMealSlots = mealSlots.map((slot) => ({ ...slot, option_ids: optionIdsBySlot.get(slot.id) || [] }));
-  const places = (rawPlaces as any[]).map((place) => ({ ...place, restaurant_id: restaurantByPlace.get(place.id) || null }));
+  const placeResearchRows = db.prepare('SELECT * FROM place_research WHERE place_id IN (SELECT id FROM places WHERE trip_id = ?)').all(tripId) as any[];
+  const researchByPlace = new Map(placeResearchRows.map((row) => [row.place_id, row]));
+  const places = (rawPlaces as any[]).map((place) => {
+    const research = researchByPlace.get(place.id);
+    return {
+      ...place,
+      restaurant_id: restaurantByPlace.get(place.id) || null,
+      research: research ? {
+        region: research.region,
+        suggested_dates: safeJson(research.suggested_dates_json),
+        best_time: research.best_time,
+        area: research.area,
+        source_url: research.source_url,
+        note: research.research_note,
+        sort_order: research.sort_order,
+      } : null,
+    };
+  });
   return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots };
 }
 

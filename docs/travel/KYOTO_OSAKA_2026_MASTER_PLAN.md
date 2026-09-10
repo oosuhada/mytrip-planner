@@ -231,6 +231,28 @@ Official store/booking systems take precedence over aggregators when they confli
 
 Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sanjo Honten**, **Ramen Sen no Kaze Kyoto**, **Kura Sushi Dotonbori Global Flagship**, **Ajinoya Honten**, **Fukuyoshi Osaka Shinsaibashi** and **Gyoza no Ohsho Nihombashi-Denden-Town**. A candidate changing in the site is a user decision; the canonical route/time block remains unless the linked meal slot is changed.
 
+### Expanded research pool — 2026-09-10
+
+MyTrip now keeps a larger **research pool separate from the confirmed itinerary**. A researched candidate can be dated, voted and compared without silently becoming a scheduled stop. The candidate screen should be read as **date → Kyoto/Osaka → schedule order or theme**, while the canonical itinerary remains the route/time source of truth until Oosu explicitly selects/adds an option.
+
+- **9/13 Kyoto arrival:** after the first sushi slot, optional 19:00 choices include **Katsukura Shijo Teramachi** (tonkatsu, 11:00–21:00), **MACCHA HOUSE Kyoto Kawaramachi** (matcha dessert, 11:00–20:30) and **Ramen Sen no Kaze**. Nearby non-food research includes **Shosei-en** and **Higashi Hongan-ji** between Kyoto Station/Gojo, plus **Pontocho** as a short evening walk. These are options, not obligations; arrival-day rest remains higher priority.
+- **9/14 Kyoto:** keep Kiyomizu/Gion as the core. Add **Kennin-ji** as an easy Gion-adjacent temple, **Kyoto International Manga Museum** as a heavy-rain indoor substitute, and **Saryo Tsujiri Gion / MACCHA HOUSE** as dessert candidates rather than forcing one cafe into the schedule.
+- **9/15 Osaka:** Dotonbori lunch/dinner now has broader alternates including **Mizuno** for okonomiyaki and **Dotonbori Imai / Tsurutontan Soemoncho** for an optional noodle stop. Nearby **Kuromon Market, Hozenji Yokocho and Namba Parks Garden** are short candidates around the hotel/Namba cluster.
+- **9/16 Osaka:** preserve Osaka Castle + Shinsaibashi as the core. **Osaka Museum of Housing and Living** is a stronger indoor rain alternative; **Namba Yasaka, Kuromon, Hozenji and Namba Parks** remain short optional inserts rather than extra mandatory walking.
+
+Research sources used for the expanded pool include official/current pages where available:
+
+- Katsukura Shijo Teramachi: https://www.katsukura.jp/shops/sijoteramachi/
+- MACCHA HOUSE Kyoto Kawaramachi: https://maccha-house.com/1174/en/
+- Saryo Tsujiri Gion: https://www.giontsujiri.co.jp/store/saryotsujiri-honten/
+- Kyoto International Manga Museum: https://kyotomm.jp/en/opentime-cost/
+- Higashi Hongan-ji / Shosei-en: https://www.higashihonganji.or.jp/
+- Kennin-ji: https://www.kenninji.jp/access/
+- Kuromon Market / Namba Yasaka / Namba Parks / Hozenji / Osaka Museum of Housing and Living: https://osaka-info.jp/en/
+- Tsurutontan Soemoncho: https://www.tsurutontan.co.jp/shop/soemoncho/
+- Mizuno: https://www.mizuno-osaka.com/sp/global_5.html
+- Dotonbori Imai: https://www.d-imai.com/shops/honten/
+
 ### Restaurant source links
 
 - Kura: https://shop.kurasushi.co.jp/detail/657

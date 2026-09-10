@@ -5,7 +5,7 @@ import maplibregl, { Marker } from 'maplibre-gl';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, Copy, ExternalLink, GripVertical,
   ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  Plus, Printer, Route, Search, Send, Sparkles, Trash2, Users, Utensils, Vote, X,
+  PanelLeftClose, PanelLeftOpen, Plus, Printer, Route, Search, Send, Sparkles, Trash2, Users, Utensils, Vote, X,
 } from 'lucide-react';
 import { api, del, patch, post } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay } from './types';
@@ -102,6 +102,7 @@ function TripPage({ tripId }: { tripId: string }) {
     return !stored || stored === 'Woosu' ? 'Oosu' : stored;
   });
   const [quickAdd, setQuickAdd] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('mytrip-sidebar-open') !== '0');
 
   const load = useCallback(() => api<Trip>(`/api/trips/${tripId}`).then(setTrip), [tripId]);
   useEffect(() => {
@@ -128,12 +129,17 @@ function TripPage({ tripId }: { tripId: string }) {
   }, [trip?.id]);
 
   function updateName(value: string) { setPlannerName(value); localStorage.setItem('mytrip-name', value); }
+  function toggleSidebar(next?: boolean) {
+    const value = typeof next === 'boolean' ? next : !sidebarOpen;
+    setSidebarOpen(value);
+    localStorage.setItem('mytrip-sidebar-open', value ? '1' : '0');
+  }
   if (!trip) return <div className="loading"><div className="brand-mark">M</div><span>여행을 불러오는 중…</span></div>;
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
       <aside className="sidebar">
-        <button className="back" onClick={() => navigate('/')}><ArrowLeft size={18} /></button>
+        <div className="sidebar-top-actions"><button className="back" onClick={() => navigate('/')}><ArrowLeft size={18} /></button><button className="sidebar-collapse" onClick={() => toggleSidebar(false)} aria-label="사이드바 닫기"><PanelLeftClose size={17}/></button></div>
         <div className="sidebar-trip"><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><span>{formatDateRange(trip.start_date, trip.end_date)}</span></div></div>
         <nav>
           <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="여행 가이드" onClick={() => setTab('guide')} />
@@ -148,6 +154,8 @@ function TripPage({ tripId }: { tripId: string }) {
           <span>실시간 공동 편집</span>
         </div>
       </aside>
+
+      {!sidebarOpen && <button className="sidebar-reopen" onClick={() => toggleSidebar(true)} aria-label="사이드바 열기"><PanelLeftOpen size={17}/><span>메뉴</span></button>}
 
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} onAdd={() => setQuickAdd(true)} />
@@ -164,6 +172,7 @@ function TripPage({ tripId }: { tripId: string }) {
         </div>
       </section>
       {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={load} />}
+      <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} reload={load} />
     </main>
   );
 }
@@ -383,17 +392,19 @@ function VotePanel({ trip, plannerName, reload }: { trip: Trip; plannerName: str
   const [scheduleFor, setScheduleFor] = useState<Place | null>(null);
   const [schedule, setSchedule] = useState({ date: trip.start_date, start_time: '10:00' });
   const [filter, setFilter] = useState<'all'|'restaurant'|'place'>('all');
+  const [regionFilter, setRegionFilter] = useState<'all'|'Kyoto'|'Osaka'>('all');
   const [viewMode, setViewMode] = useState<'schedule'|'theme'>('schedule');
   const restaurantsById = useMemo(() => new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const)), [trip.restaurants]);
   const candidateEntries = useMemo(() => {
-    const entries: Array<{ place: Place; restaurant: Restaurant | null; mealSlots: MealSlot[]; date: string | null; orderKey: string; theme: string; context: string }> = [];
+    const entries: Array<{ place: Place; restaurant: Restaurant | null; mealSlots: MealSlot[]; date: string | null; orderKey: string; theme: string; region: 'Kyoto'|'Osaka'; context: string }> = [];
     for (const place of trip.places) {
       const restaurant = place.restaurant_id ? restaurantsById.get(place.restaurant_id) || null : null;
+      const region = candidateRegion(place, restaurant);
       if (restaurant) {
         const slots = (trip.meal_slots || []).filter((slot) => slot.option_ids.includes(restaurant.id));
         const dates = [...new Set(slots.map((slot) => slot.date))];
         if (!dates.length) {
-          entries.push({ place, restaurant, mealSlots: [], date: null, orderKey: '99:99|999', theme: '식당', context: '식사 일정 미정' });
+          entries.push({ place, restaurant, mealSlots: [], date: null, orderKey: '99:99|999', theme: '식당', region, context: '식사 일정 미정' });
           continue;
         }
         for (const date of dates) {
@@ -401,7 +412,7 @@ function VotePanel({ trip, plannerName, reload }: { trip: Trip; plannerName: str
           entries.push({
             place, restaurant, mealSlots: dateSlots, date,
             orderKey: `${dateSlots[0]?.time || '99:99'}|${String(dateSlots[0]?.sort_order || 999).padStart(3, '0')}`,
-            theme: '식당',
+            theme: '식당', region,
             context: dateSlots.map((slot) => `${slot.time || ''} ${slot.label}`.trim()).join(' · '),
           });
         }
@@ -409,25 +420,31 @@ function VotePanel({ trip, plannerName, reload }: { trip: Trip; plannerName: str
       }
 
       const relatedEvents = trip.events.filter((event) => candidatePlaceMatchesEvent(place, event));
-      const dates = [...new Set(relatedEvents.map((event) => event.date))];
+      const dates = [...new Set([...relatedEvents.map((event) => event.date), ...(place.research?.suggested_dates || [])])];
       if (!dates.length) {
-        entries.push({ place, restaurant: null, mealSlots: [], date: null, orderKey: '99:99|999', theme: candidateThemeLabel(place), context: '아직 일정에 넣지 않은 후보' });
+        entries.push({ place, restaurant: null, mealSlots: [], date: null, orderKey: '99:99|999', theme: candidateThemeLabel(place), region, context: place.research?.note || '아직 일정에 넣지 않은 후보' });
         continue;
       }
       for (const date of dates) {
         const events = relatedEvents.filter((event) => event.date === date).sort((a, b) => compareDayEvents(a, b, relatedEvents));
         const first = events[0];
+        const researchTime = candidateResearchSortTime(place.research?.best_time);
         entries.push({
           place, restaurant: null, mealSlots: [], date,
-          orderKey: `${first?.start_time || '99:99'}|${String(first?.sort_order || 999).padStart(3, '0')}`,
-          theme: candidateThemeLabel(place),
-          context: events.map((event) => `${event.start_time || ''} ${event.title}`.trim()).join(' · '),
+          orderKey: `${first?.start_time || researchTime || '99:99'}|${String(first?.sort_order || place.research?.sort_order || 999).padStart(3, '0')}`,
+          theme: candidateThemeLabel(place), region,
+          context: events.length ? events.map((event) => `${event.start_time || ''} ${event.title}`.trim()).join(' · ') : [place.research?.best_time, place.research?.note].filter(Boolean).join(' · '),
         });
       }
     }
     return entries;
   }, [restaurantsById, trip.events, trip.meal_slots, trip.places]);
-  const filteredEntries = candidateEntries.filter((entry) => filter === 'all' || (filter === 'restaurant' ? Boolean(entry.restaurant) : !entry.restaurant));
+  const filteredEntries = candidateEntries.filter((entry) => (filter === 'all' || (filter === 'restaurant' ? Boolean(entry.restaurant) : !entry.restaurant)) && (regionFilter === 'all' || entry.region === regionFilter));
+  const regionCounts = useMemo(() => {
+    const unique = new globalThis.Map<string, 'Kyoto'|'Osaka'>();
+    for (const entry of candidateEntries) unique.set(entry.place.id, entry.region);
+    return { Kyoto: [...unique.values()].filter((region) => region === 'Kyoto').length, Osaka: [...unique.values()].filter((region) => region === 'Osaka').length };
+  }, [candidateEntries]);
   const dateSections = useMemo(() => {
     const dates = dateRange(trip.start_date, trip.end_date);
     const result = dates.map((date, index) => ({ date, dayNumber: index + 1, entries: filteredEntries.filter((entry) => entry.date === date).sort((a, b) => a.orderKey.localeCompare(b.orderKey) || a.place.name.localeCompare(b.place.name)) })).filter((section) => section.entries.length);
@@ -441,11 +458,15 @@ function VotePanel({ trip, plannerName, reload }: { trip: Trip; plannerName: str
   function renderCandidate(entry: typeof candidateEntries[number], index: number) {
     const { place: p, restaurant, mealSlots } = entry;
     const mapUrl = restaurant?.google_maps_url || googleMapsPlaceSearchUrl(p);
-    return <article className={`vote-card ${restaurant ? 'restaurant-vote-card' : ''}`} key={`${p.id}-${entry.date || 'flex'}`}>{restaurant && <RestaurantPhoto url={restaurant.image_url} kind="vote"/>}<div className="rank">{String(index+1).padStart(2,'0')}</div><div className="vote-body"><div className="candidate-context"><CalendarDays size={12}/><span>{entry.context}</span></div><div className="idea-top"><span>{restaurant ? 'restaurant' : p.category}</span><small>{p.saved_by ? `${p.saved_by} saved` : 'saved'}</small></div><h3>{p.name}</h3><p>{restaurant ? `${restaurant.price_range || ''} · ${restaurant.hours || ''}` : (p.notes || p.address)}</p>{restaurant?.dietary_notes && <div className="vote-diet">{restaurant.dietary_notes}</div>}{mealSlots.length > 0 && <div className="vote-meal-slots">{mealSlots.map((slot)=><div key={slot.id}><span>{formatMonthDay(slot.date)} {slot.label}</span><button disabled={slot.selected_restaurant_id===restaurant?.id} onClick={()=>restaurant&&selectMeal(slot.id,restaurant.id)}>{slot.selected_restaurant_id===restaurant?.id?'선택됨':'이 식당 선택'}</button></div>)}</div>}<div className="vote-links">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={13}/>Google Maps</a>}{restaurant?.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴 · 사진</a>}{restaurant?.reservation_url && <a href={restaurant.reservation_url} target="_blank" rel="noreferrer"><ExternalLink size={13}/>공식</a>}</div><div className="vote-actions"><button onClick={() => vote(p, 1)}><Heart size={15}/><strong>{p.vote_score}</strong></button>{!restaurant && <button onClick={() => setScheduleFor(p)}><CalendarDays size={15}/> 일정에 넣기</button>}{!restaurant && <button className="ghost-icon" onClick={async () => { await del(`/api/places/${p.id}`); reload(); }}><Trash2 size={14}/></button>}</div></div></article>;
+    return <article className={`vote-card ${restaurant ? 'restaurant-vote-card' : ''}`} key={`${p.id}-${entry.date || 'flex'}`}>{restaurant && <RestaurantPhoto url={restaurant.image_url} kind="vote"/>}<div className="rank">{String(index+1).padStart(2,'0')}</div><div className="vote-body"><div className="candidate-context"><span className={`candidate-region ${entry.region.toLowerCase()}`}>{entry.region.toUpperCase()}</span><span>{entry.context}</span></div><div className="idea-top"><span>{restaurant ? 'restaurant' : p.category}</span><small>{p.saved_by ? `${p.saved_by} saved` : 'saved'}</small></div><h3>{p.name}</h3><p>{restaurant ? `${restaurant.price_range || ''} · ${restaurant.hours || ''}` : (p.notes || p.address)}</p>{restaurant?.dietary_notes && <div className="vote-diet">{restaurant.dietary_notes}</div>}{p.research?.source_url && !restaurant && <div className="vote-links research-link"><a href={p.research.source_url} target="_blank" rel="noreferrer"><ExternalLink size={13}/>리서치 출처</a></div>}{mealSlots.length > 0 && <div className="vote-meal-slots">{mealSlots.map((slot)=><div key={slot.id}><span>{formatMonthDay(slot.date)} {slot.label}</span><button disabled={slot.selected_restaurant_id===restaurant?.id} onClick={()=>restaurant&&selectMeal(slot.id,restaurant.id)}>{slot.selected_restaurant_id===restaurant?.id?'선택됨':'이 식당 선택'}</button></div>)}</div>}<div className="vote-links">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={13}/>Google Maps</a>}{restaurant?.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴 · 사진</a>}{restaurant?.reservation_url && <a href={restaurant.reservation_url} target="_blank" rel="noreferrer"><ExternalLink size={13}/>공식</a>}</div><div className="vote-actions"><button onClick={() => vote(p, 1)}><Heart size={15}/><strong>{p.vote_score}</strong></button>{!restaurant && <button onClick={() => setScheduleFor(p)}><CalendarDays size={15}/> 일정에 넣기</button>}{!restaurant && <button className="ghost-icon" onClick={async () => { await del(`/api/places/${p.id}`); reload(); }}><Trash2 size={14}/></button>}</div></div></article>;
+  }
+  function renderRegionBlock(entries: typeof candidateEntries, mode: 'schedule'|'theme') {
+    return <div className="vote-region-groups">{(['Kyoto','Osaka'] as const).map((region) => { const regionEntries = entries.filter((entry) => entry.region === region); if (!regionEntries.length) return null; return <section className={`vote-region-group ${region.toLowerCase()}`} key={region}><div className="vote-region-head"><div><span>{region.toUpperCase()}</span><strong>{region === 'Kyoto' ? '교토' : '오사카'}</strong></div><b>{regionEntries.length}개</b></div>{mode === 'schedule' ? <div className="vote-grid">{regionEntries.map((entry, index) => renderCandidate(entry, index))}</div> : <div className="vote-theme-groups">{[...new Set(regionEntries.map((entry) => entry.theme))].map((theme) => { const themeEntries = regionEntries.filter((entry) => entry.theme === theme); return <section className="vote-theme-group" key={theme}><h4>{theme}<span>{themeEntries.length}</span></h4><div className="vote-grid">{themeEntries.map((entry, index) => renderCandidate(entry, index))}</div></section>; })}</div>}</section>; })}</div>;
   }
   return <div className="panel-page vote-page"><div className="page-title"><div><p className="eyebrow">SHARED SHORTLIST</p><h2>날짜별로 후보 비교하기</h2><p>날짜를 먼저 보고, 그 안에서 일정 순서 또는 테마별로 후보를 비교하고 투표할 수 있습니다.</p></div><div className="people-stack">{trip.participants.map((p) => <span key={p.id}>{p.name.slice(0,1)}</span>)}</div></div>
+    <div className="vote-region-filter"><span>지역</span><button className={regionFilter==='all'?'active':''} onClick={()=>setRegionFilter('all')}>전체</button><button className={regionFilter==='Kyoto'?'active kyoto':''} onClick={()=>setRegionFilter('Kyoto')}>KYOTO · {regionCounts.Kyoto}</button><button className={regionFilter==='Osaka'?'active osaka':''} onClick={()=>setRegionFilter('Osaka')}>OSAKA · {regionCounts.Osaka}</button></div>
     <div className="vote-toolbar"><div className="vote-filters"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>전체 {trip.places.length}</button><button className={filter==='restaurant'?'active':''} onClick={()=>setFilter('restaurant')}>식당 {trip.places.filter((place)=>place.restaurant_id).length}</button><button className={filter==='place'?'active':''} onClick={()=>setFilter('place')}>관광 · 장소 {trip.places.filter((place)=>!place.restaurant_id).length}</button></div><div className="vote-view-toggle"><button className={viewMode==='schedule'?'active':''} onClick={()=>setViewMode('schedule')}><CalendarDays size={13}/> 일정 순서</button><button className={viewMode==='theme'?'active':''} onClick={()=>setViewMode('theme')}><Sparkles size={13}/> 테마별</button></div></div>
-    <div className="vote-date-sections">{dateSections.map((section) => <section className="vote-date-section" key={section.date || 'unscheduled'}><header><div><span>{section.date ? `DAY ${section.dayNumber}` : 'FLEX'}</span><h3>{section.date ? formatDay(section.date) : '날짜 미정 후보'}</h3></div><b>{section.entries.length}개 후보</b></header>{viewMode === 'schedule' ? <div className="vote-grid">{section.entries.map((entry, index) => renderCandidate(entry, index))}</div> : <div className="vote-theme-groups">{[...new Set(section.entries.map((entry) => entry.theme))].map((theme) => { const themeEntries = section.entries.filter((entry) => entry.theme === theme); return <section className="vote-theme-group" key={theme}><h4>{theme}<span>{themeEntries.length}</span></h4><div className="vote-grid">{themeEntries.map((entry, index) => renderCandidate(entry, index))}</div></section>; })}</div>}</section>)}</div>
+    <div className="vote-date-sections">{dateSections.map((section) => <section className="vote-date-section" key={section.date || 'unscheduled'}><header><div><span>{section.date ? `DAY ${section.dayNumber}` : 'FLEX'}</span><h3>{section.date ? formatDay(section.date) : '날짜 미정 후보'}</h3></div><b>{section.entries.length}개 후보</b></header>{renderRegionBlock(section.entries, viewMode)}</section>)}</div>
     {scheduleFor && <div className="modal-backdrop" onMouseDown={() => setScheduleFor(null)}><div className="modal small-modal" onMouseDown={(e)=>e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">ADD TO DAY PLAN</p><h2>{scheduleFor.name}</h2></div><button className="icon-btn" onClick={()=>setScheduleFor(null)}><X/></button></div><div className="form-row"><label>날짜<select value={schedule.date} onChange={(e)=>setSchedule({...schedule,date:e.target.value})}>{dateRange(trip.start_date,trip.end_date).map(d=><option key={d}>{d}</option>)}</select></label><label>시간<input type="time" value={schedule.start_time} onChange={(e)=>setSchedule({...schedule,start_time:e.target.value})}/></label></div><button className="primary full" onClick={addSchedule}>일정에 추가</button></div></div>}
   </div>;
 }
@@ -454,6 +475,42 @@ function RestaurantPhoto({ url, kind }: { url?: string | null; kind: 'meal' | 'v
   const [failed, setFailed] = useState(false);
   if (!url || failed) return <div className={kind === 'vote' ? 'vote-photo vote-photo-fallback' : 'meal-image-fallback'}><Utensils/></div>;
   return <img className={kind === 'vote' ? 'vote-photo' : undefined} src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/>;
+}
+
+type AssistantChatMessage = { role: 'user'|'assistant'; content: string; ideas?: Array<{ name: string; category?: string; reason?: string; bestTime?: string; area?: string }> };
+
+function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: Trip; weather: WeatherDay[]; plannerName: string; reload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState<AssistantChatMessage[]>([{ role: 'assistant', content: 'Kyoto · Osaka 전체 일정, 식당 후보, 투표, 이동, 준비물 상태를 같이 보고 있어요. 무엇을 조정할까요?' }]);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+  const weatherText = weather.map((day) => `${day.date} ${weatherLabel(day.code)} ${Math.round(day.max)}/${Math.round(day.min)}C rain ${day.rain}%`).join('; ');
+  const savedNames = new Set(trip.places.map((place) => place.name));
+  useEffect(() => { if (open) messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, open, loading]);
+
+  async function ask(text?: string) {
+    const prompt = (text ?? input).trim();
+    if (!prompt || loading) return;
+    const history = messages.slice(-8).map((message) => ({ role: message.role, content: message.content }));
+    setInput(''); setMessages((prev) => [...prev, { role: 'user', content: prompt }]); setLoading(true); setOpen(true);
+    try {
+      const result: any = await post(`/api/trips/${trip.id}/ai/ideas`, { prompt, weather: weatherText, history });
+      setMessages((prev) => [...prev, { role: 'assistant', content: result.message || '확인했습니다.', ideas: Array.isArray(result.ideas) ? result.ideas : [] }]);
+    } catch (error) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: `응답을 불러오지 못했습니다: ${error instanceof Error ? error.message : 'unknown error'}` }]);
+    } finally { setLoading(false); }
+  }
+  async function saveIdea(idea: NonNullable<AssistantChatMessage['ideas']>[number]) {
+    if (savedNames.has(idea.name)) return;
+    await post(`/api/trips/${trip.id}/places`, { name: idea.name, category: idea.category || 'AI 추천', address: idea.area || null, notes: [idea.reason, idea.bestTime ? `추천 시간: ${idea.bestTime}` : ''].filter(Boolean).join(' · '), saved_by: plannerName || 'Oosu' });
+    reload();
+  }
+  const quickPrompts = ['첫날 도착 후 선택지 정리해줘', '비 오면 일정 어떻게 바꿔?', '아직 안 한 준비 뭐야?', '오늘 식당 후보 비교해줘'];
+  return <>
+    <button className={`assistant-fab ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} aria-label="MyTrip Assistant 열기"><Sparkles size={18}/><span>AI Assistant</span></button>
+    {open && <aside className="assistant-panel" aria-label="MyTrip Assistant"><header><div><span className="assistant-orbit"><Sparkles size={15}/></span><div><strong>MyTrip Assistant</strong><small>전체 여행 컨텍스트 연결됨</small></div></div><button onClick={() => setOpen(false)} aria-label="Assistant 닫기"><X size={17}/></button></header><div className="assistant-context-strip"><span>KYOTO</span><span>OSAKA</span><b>{trip.events.length} 일정</b><b>{trip.places.length} 후보</b><b>{trip.checklist.filter((item) => item.status !== 'DONE').length} 준비 남음</b></div><div className="assistant-quick">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div><div className="assistant-messages" ref={messagesRef}>{messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'assistant' ? 'AI' : plannerName || '나'}</span><p>{message.content}</p>{message.ideas?.length ? <div className="assistant-ideas">{message.ideas.map((idea) => <article key={`${idea.name}-${idea.bestTime || ''}`}><div><strong>{idea.name}</strong>{idea.area && <small>{idea.area}</small>}</div>{idea.reason && <p>{idea.reason}</p>}<footer>{idea.bestTime && <span>{idea.bestTime}</span>}<button disabled={savedNames.has(idea.name)} onClick={() => saveIdea(idea)}><Heart size={11}/>{savedNames.has(idea.name) ? '후보에 있음' : '후보 저장'}</button></footer></article>)}</div> : null}</div>)}{loading && <div className="assistant-message assistant loading"><span>AI</span><p>현재 일정과 후보를 같이 확인하는 중…</p></div>}</div><div className="assistant-composer"><textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') ask(); }} placeholder="예: 9/14 비 오면 Kiyomizu를 줄이고 어디로 가?"/><button onClick={() => ask()} disabled={loading || !input.trim()}><Send size={16}/></button><small>⌘/Ctrl + Enter · 현재 일정/식당/투표/준비물 상태를 자동 참조</small></div></aside>}
+  </>;
 }
 
 function PackingPanel({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
@@ -557,6 +614,8 @@ function googleMapsEventUrl(event:TripEvent){const parts=(event.location||'').sp
 function googleMapsPlaceSearchUrl(place:Place){const query=place.address||place.name;return query?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`:'';}
 function candidatePlaceMatchesEvent(place:Place,event:TripEvent){const name=normalizeCandidateText(place.name);if(!name)return false;const fields=[event.title,event.location,event.address].map((value)=>normalizeCandidateText(value||'')).filter(Boolean);if(fields.some((field)=>field.includes(name)||(name.length>=6&&name.includes(field))))return true;const address=normalizeCandidateText(place.address||'');return Boolean(address&&fields.some((field)=>field===address||(address.length>=10&&field.includes(address))));}
 function normalizeCandidateText(value:string){return value.toLowerCase().replace(/[·’'().,\-_/]/g,' ').replace(/\s+/g,' ').trim();}
+function candidateRegion(place:Place,restaurant?:Restaurant|null):'Kyoto'|'Osaka'{const explicit=place.research?.region;if(explicit==='Kyoto'||explicit==='Osaka')return explicit;const city=(restaurant?.city||'').toLowerCase();if(city.includes('kyoto'))return'Kyoto';if(city.includes('osaka')||city.includes('kix'))return'Osaka';const text=`${place.name} ${place.address||''}`.toLowerCase();if(/kyoto|京都|gion|fushimi|arashiyama|higashiyama|nakagyo|shimogyo/.test(text))return'Kyoto';return'Osaka';}
+function candidateResearchSortTime(value?:string|null){const match=(value||'').match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);return match?`${match[1].padStart(2,'0')}:${match[2]}`:'';}
 function candidateThemeLabel(place:Place){const category=(place.category||'기타').toLowerCase();const labels:Record<string,string>={nature:'Nature · 자연',shrine:'Shrine · 신사',temple:'Temple · 사찰',food:'Food · 먹거리',neighborhood:'Neighborhood · 동네',landmark:'Landmark · 명소',activity:'Activity · 체험',place:'기타 장소'};return labels[category]||place.category||'기타 장소';}
 function weatherIcon(code:number){if(code>=95)return '⛈';if(code>=61)return '🌧';if(code>=51)return '🌦';if(code>=45)return '🌫';if(code>=2)return '⛅';return '☀️';}
 function weatherLabel(code:number){if(code>=95)return '뇌우';if(code>=80)return '소나기';if(code>=61)return '비';if(code>=51)return '이슬비';if(code>=45)return '안개';if(code>=3)return '흐림';if(code>=1)return '구름 조금';return '맑음';}

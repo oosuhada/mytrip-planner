@@ -41,6 +41,15 @@ export type Place = {
   vote_score: number;
   vote_count: number;
   restaurant_id?: string | null;
+  research?: {
+    region: string;
+    suggested_dates?: string[];
+    best_time?: string | null;
+    area?: string | null;
+    source_url?: string | null;
+    note?: string | null;
+    sort_order?: number;
+  } | null;
 };
 
 export type PackingItem = {

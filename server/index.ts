@@ -185,7 +185,28 @@ app.get('/api/weather', async (req, res) => {
 app.post('/api/trips/:id/ai/ideas', async (req, res) => {
   const trip: any = getTrip(req.params.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
-  const result = await generateTripIdeas({ destination: trip.destination, dates: `${trip.start_date}~${trip.end_date}`, prompt: String(req.body.prompt || ''), weather: req.body.weather, existing: trip.places.map((p: any) => p.name) });
+  const restaurants = new Map((trip.restaurants || []).map((restaurant: any) => [restaurant.id, restaurant]));
+  const bags = new Map((trip.packing_bags || []).map((bag: any) => [bag.id, bag]));
+  const context = {
+    trip: { title: trip.title, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date },
+    travelers: (trip.participants || []).map((person: any) => person.name),
+    rules: (trip.guides || []).filter((guide: any) => guide.section === 'rules').map((guide: any) => ({ title: guide.title, details: guide.details })),
+    itinerary: (trip.events || []).map((event: any) => ({ date: event.date, start: event.start_time, end: event.end_time, title: event.title, kind: event.kind, location: event.location, notes: event.notes, source: event.source, meta: event.meta })),
+    meals: (trip.meal_slots || []).map((slot: any) => ({
+      date: slot.date, time: slot.time, label: slot.label, area: slot.area, is_scheduled: Boolean(slot.event_id),
+      selected: slot.selected_restaurant_id ? (restaurants.get(slot.selected_restaurant_id) as any)?.name : null,
+      options: (slot.option_ids || []).map((id: string) => restaurants.get(id)).filter(Boolean).map((restaurant: any) => ({ name: restaurant.name, city: restaurant.city, hours: restaurant.hours, budget: restaurant.price_range, reservation: restaurant.reservation_status, notes: restaurant.notes, dietary: restaurant.dietary_notes })),
+    })),
+    candidates: (trip.places || []).map((place: any) => ({ name: place.name, category: place.category, votes: place.vote_score, notes: place.notes, region: place.research?.region, suggested_dates: place.research?.suggested_dates, best_time: place.research?.best_time, research_note: place.research?.note })),
+    checklist: (trip.checklist || []).map((item: any) => ({ title: item.title, category: item.category, status: item.status, notes: item.notes })),
+    packing: {
+      bags: (trip.packing_bags || []).map((bag: any) => ({ name: bag.name, items: (trip.packing || []).filter((item: any) => item.bag_id === bag.id).length, limit_kg: bag.weight_limit })),
+      unchecked: (trip.packing || []).filter((item: any) => !item.checked).map((item: any) => ({ label: item.label, bag: (bags.get(item.bag_id) as any)?.name || '미배정', reason: item.reason })),
+    },
+    decisions: (trip.options || []).map((option: any) => ({ group: option.group_title, name: option.name, price: option.price, fit: option.fit, verdict: option.verdict, recommended: Boolean(option.recommended) })),
+  };
+  const history = Array.isArray(req.body.history) ? req.body.history.slice(-8).map((item: any) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: String(item.content || '').slice(0, 1500) })) : [];
+  const result = await generateTripIdeas({ destination: trip.destination, dates: `${trip.start_date}~${trip.end_date}`, prompt: String(req.body.prompt || ''), weather: req.body.weather, existing: trip.places.map((p: any) => p.name), context, history });
   res.json(result);
 });
 
@@ -325,7 +346,7 @@ function deriveRestaurantChecklist(tripId: string) {
   const pending = db.prepare(`
     SELECT COUNT(*) AS n FROM meal_slots ms
     LEFT JOIN restaurants r ON r.id = ms.selected_restaurant_id
-    WHERE ms.trip_id = ? AND (
+    WHERE ms.trip_id = ? AND ms.event_id IS NOT NULL AND (
       ms.selected_restaurant_id IS NULL OR
       (r.reservation_action = 'RESERVE NOW' AND r.reservation_status != 'BOOKED')
     )
