@@ -78,3 +78,7 @@
   .guide-check strong{font-size:11px}
   .guide-check small{font-size:9px}
 }
+
+/* Itinerary flow + Google Maps actions */
+.event-map-link{display:flex;align-items:flex-start;gap:4px;margin:5px 0 0;color:#68766c;text-decoration:none;font-size:9px;line-height:1.4}.event-map-link>span{min-width:0;flex:1}.event-map-link>svg{flex:0 0 auto;margin-top:1px}.event-map-link:hover{color:#3f5d48;text-decoration:underline}.booking-flow{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:7px;border-radius:8px;background:#f2efe7;border:1px solid #e4dfd3}.booking-flow-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:5px;align-items:center}.booking-flow-row>span{font-size:7px;font-weight:700;color:#918a7f;text-transform:uppercase}.booking-flow-row>strong{min-width:0;font-size:8px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.booking-flow-row>a{display:inline-flex;align-items:center;gap:3px;text-decoration:none;color:#42624d;font-size:7.5px;font-weight:700;white-space:nowrap}.booking-flow-row>a:hover{text-decoration:underline}.booking-lock{background:#e9e5da!important;color:#6d6558!important}.event-card.kind-flight .booking-flow,.event-card.kind-hotel .booking-flow{background:#eef1ed}.event-card.kind-flight .event-map-link,.event-card.kind-hotel .event-map-link{font-weight:600}
+@media(max-width:720px){.booking-flow-row{grid-template-columns:24px minmax(0,1fr) auto}.booking-flow-row>strong{font-size:8.5px!important}.booking-flow-row>a{font-size:8px}.event-map-link{font-size:9.5px}}

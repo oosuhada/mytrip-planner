@@ -65,7 +65,6 @@ app.post('/api/trips/:id/events', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: 'Event not found' });
-  if (existing.source === 'booking') return res.status(409).json({ error: 'Confirmed booking events are read-only' });
   const allowed = ['title', 'kind', 'date', 'start_time', 'end_time', 'location', 'address', 'lat', 'lng', 'notes', 'sort_order'];
   const updates = Object.entries(req.body).filter(([key]) => allowed.includes(key));
   if (!updates.length) return res.json({ ok: true });
@@ -76,9 +75,8 @@ app.patch('/api/events/:id', async (req, res) => {
 });
 
 app.delete('/api/events/:id', (req, res) => {
-  const existing = db.prepare('SELECT trip_id, source FROM events WHERE id = ?').get(req.params.id) as any;
+  const existing = db.prepare('SELECT trip_id FROM events WHERE id = ?').get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: 'Event not found' });
-  if (existing.source === 'booking') return res.status(409).json({ error: 'Confirmed booking events cannot be deleted' });
   db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
   emitTrip(existing.trip_id);
   res.json({ ok: true });
