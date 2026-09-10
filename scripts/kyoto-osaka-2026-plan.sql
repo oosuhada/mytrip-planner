@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS place_research (
   best_time TEXT,
   area TEXT,
   source_url TEXT,
+  image_url TEXT,
   research_note TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -350,6 +351,22 @@ ON CONFLICT(place_id) DO UPDATE SET
   best_time=excluded.best_time, area=excluded.area, source_url=excluded.source_url,
   research_note=excluded.research_note, sort_order=excluded.sort_order,
   updated_at=CURRENT_TIMESTAMP;
+
+-- Official/source-page representative images used by itinerary cards. Google Maps
+-- remains the click-through destination; images are not scraped from Maps.
+UPDATE place_research SET image_url='https://www.kiyomizudera.or.jp/en/img/common/ogp/ogp.jpg' WHERE place_id=(SELECT id FROM places WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND name='Kiyomizu-dera' LIMIT 1);
+UPDATE place_research SET image_url='https://kyoto.travel/wp-content/uploads/2025/05/VisitKyoto.jpg' WHERE place_id=(SELECT id FROM places WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND name='Gion' LIMIT 1);
+UPDATE place_research SET image_url='https://inari.jp/en/wp-content/uploads/2015/09/index_mainvisual.jpg' WHERE place_id=(SELECT id FROM places WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND name='Fushimi Inari Taisha' LIMIT 1);
+UPDATE place_research SET image_url='https://cdn.osaka-info.jp/cache/page_translation_500/9103593c-04bf-11e8-8dd4-06326e701dd4.jpeg' WHERE place_id=(SELECT id FROM places WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND name='Dotonbori' LIMIT 1);
+UPDATE place_research SET image_url='https://cdn.osaka-info.jp/cache/page_translation_500/4f1da28c-f917-11e8-a72d-06326e701dd4.jpeg' WHERE place_id=(SELECT id FROM places WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND name='Namba Yasaka Jinja' LIMIT 1);
+UPDATE place_research SET image_url='https://www.osakacastle.net/sns.jpg' WHERE place_id=(SELECT id FROM places WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND name='Osaka Castle' LIMIT 1);
+UPDATE place_research SET image_url='https://www.higashihonganji.or.jp/assets/images/common/ogp.jpg' WHERE place_id='research-place-shoseien';
+UPDATE place_research SET image_url='https://www.higashihonganji.or.jp/assets/images/common/ogp.jpg' WHERE place_id='research-place-higashi-honganji';
+UPDATE place_research SET image_url='https://kyoto.travel/wp-content/uploads/2025/05/VisitKyoto.jpg' WHERE place_id='research-place-pontocho';
+UPDATE place_research SET image_url='https://cdn.osaka-info.jp/cache/page_translation_500/7781fcde-04bf-11e8-9aa8-06326e701dd4.jpeg' WHERE place_id='research-place-kuromon';
+UPDATE place_research SET image_url='https://cdn.osaka-info.jp/cache/page_translation_500/7da22d78-04bf-11e8-9399-06326e701dd4.jpeg' WHERE place_id='research-place-hozenji';
+UPDATE place_research SET image_url='https://cdn.osaka-info.jp/cache/page_translation_500/debb7fd0-04bd-11e8-954f-06326e701dd4.jpeg' WHERE place_id='research-place-namba-parks';
+UPDATE place_research SET image_url='https://cdn.osaka-info.jp/cache/page_translation_500/b13b9bd8-04bf-11e8-97ea-06326e701dd4.jpeg' WHERE place_id='research-place-housing-museum';
 
 -- Rules and quick-reference guides.
 INSERT INTO trip_guides (id, trip_id, section, title, subtitle, details, sort_order)

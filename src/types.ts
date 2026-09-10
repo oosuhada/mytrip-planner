@@ -27,6 +27,8 @@ export type TripEvent = {
   source: string;
   sort_order: number;
   meta?: Record<string, unknown>;
+  image_url?: string | null;
+  image_source_url?: string | null;
 };
 
 export type Place = {
@@ -47,6 +49,7 @@ export type Place = {
     best_time?: string | null;
     area?: string | null;
     source_url?: string | null;
+    image_url?: string | null;
     note?: string | null;
     sort_order?: number;
   } | null;

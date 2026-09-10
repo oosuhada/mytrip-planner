@@ -232,6 +232,7 @@ CREATE TABLE IF NOT EXISTS place_research (
   best_time TEXT,
   area TEXT,
   source_url TEXT,
+  image_url TEXT,
   research_note TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -288,6 +289,7 @@ ensureColumn('packing_items', 'bag_id', 'TEXT');
 ensureColumn('packing_items', 'quantity', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('packing_items', 'weight_kg', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('packing_items', 'source', "TEXT NOT NULL DEFAULT 'manual'");
+ensureColumn('place_research', 'image_url', 'TEXT');
 
 export const id = () => crypto.randomUUID();
 
@@ -403,12 +405,35 @@ export function getTrip(tripId: string) {
         best_time: research.best_time,
         area: research.area,
         source_url: research.source_url,
+        image_url: research.image_url,
         note: research.research_note,
         sort_order: research.sort_order,
       } : null,
     };
   });
-  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots, decision_slots: richDecisionSlots };
+  const eventImageCandidates = [
+    { name: 'HARUKA', image_url: 'https://www.westjr.co.jp/travel-information/assets/img/common/ogp.webp', source_url: 'https://www.westjr.co.jp/travel-information/en/tickets-passes/oneway/haruka/' },
+    { name: 'Fushimi Inari', image_url: 'https://inari.jp/en/wp-content/uploads/2015/09/index_mainvisual.jpg', source_url: 'https://inari.jp/en/' },
+    { name: 'Nipponbashi Crystal Hotel', image_url: 'https://crystalhotel.jp/en/wp-content/uploads/2024/02/0I2A0405.jpg', source_url: 'https://crystalhotel.jp/en/nipponbashi/' },
+    ...richRestaurants.filter((restaurant: any) => restaurant.image_url).map((restaurant: any) => ({
+      name: restaurant.name,
+      image_url: restaurant.image_url,
+      source_url: restaurant.source_url || restaurant.menu_url || restaurant.google_maps_url,
+    })),
+    ...places.filter((place: any) => place.research?.image_url).map((place: any) => ({
+      name: place.name,
+      image_url: place.research.image_url,
+      source_url: place.research.source_url,
+    })),
+  ];
+  const eventsWithImages = events.map((event: any) => {
+    const haystack = `${event.title || ''} ${event.location || ''}`.toLowerCase();
+    const match = eventImageCandidates
+      .filter((candidate) => candidate.name && haystack.includes(String(candidate.name).toLowerCase()))
+      .sort((a, b) => String(b.name).length - String(a.name).length)[0];
+    return match ? { ...event, image_url: match.image_url, image_source_url: match.source_url } : event;
+  });
+  return { ...(trip as object), participants, events: eventsWithImages, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots, decision_slots: richDecisionSlots };
 }
 
 function safeJson(value: string) {

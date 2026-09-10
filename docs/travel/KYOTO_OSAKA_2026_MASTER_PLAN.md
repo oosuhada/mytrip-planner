@@ -239,6 +239,9 @@ Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sa
 - The schedule itself shows the currently selected route; auxiliary cards that only belong to another route may be hidden there to keep the actual timeline coherent. Their full Plan B details remain in the decision board.
 - The Day Plan keeps all five days in chronological order but uses a wide horizontal card layout. Before/after the trip it opens on **Day 1**; during the trip it opens directly on the current Japan-date day so Day 4 does not require scrolling through Days 1–3.
 - Schedule times are displayed and edited in **24-hour HH:mm** format.
+- On mobile, the six-tab strip is intentionally removed. A compact **hamburger → left drawer** owns global navigation, while the Schedule screen uses a sticky **Day 1–5 date switcher** and renders only the selected day. This avoids horizontal day scrolling on a phone.
+- The floating assistant opens as a **full-screen mobile sheet** (100dvh) so long itinerary-aware answers have enough reading space; desktop keeps the smaller floating panel.
+- Itinerary cards always have a visual area. Restaurant/attraction/hotel/rail imagery uses official or official-source-page images where stable; otherwise the visual becomes an explicit Google Maps-linked route/place placeholder rather than an empty/broken image. Google Maps photos are not hotlinked without a configured Places API key.
 
 ### Expanded research pool — 2026-09-10
 
