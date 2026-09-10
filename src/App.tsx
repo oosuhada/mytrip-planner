@@ -4,8 +4,8 @@ import { io } from 'socket.io-client';
 import maplibregl, { Marker } from 'maplibre-gl';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, GripVertical,
-  Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  Plus, Printer, Search, Send, Sparkles, Trash2, Users, Vote, X,
+  ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
+  Plus, Printer, Route, Search, Send, Sparkles, Trash2, Users, Utensils, Vote, X,
 } from 'lucide-react';
 import { api, del, patch, post } from './api';
 import type { PackingItem, Place, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay } from './types';
@@ -90,11 +90,11 @@ function HomePage() {
   );
 }
 
-type Tab = 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type Tab = 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 
 function TripPage({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [tab, setTab] = useState<Tab>('schedule');
+  const [tab, setTab] = useState<Tab>('guide');
   const [weather, setWeather] = useState<WeatherDay[]>([]);
   const [plannerName, setPlannerName] = useState(() => {
     const stored = localStorage.getItem('mytrip-name');
@@ -128,6 +128,7 @@ function TripPage({ tripId }: { tripId: string }) {
         <button className="back" onClick={() => navigate('/')}><ArrowLeft size={18} /></button>
         <div className="sidebar-trip"><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><span>{formatDateRange(trip.start_date, trip.end_date)}</span></div></div>
         <nav>
+          <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="여행 가이드" onClick={() => setTab('guide')} />
           <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정" onClick={() => setTab('schedule')} />
           <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 발견" onClick={() => setTab('map')} />
           <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 투표" onClick={() => setTab('votes')} count={trip.places.length} />
@@ -143,9 +144,10 @@ function TripPage({ tripId }: { tripId: string }) {
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} onAdd={() => setQuickAdd(true)} />
         <div className="mobile-tabs">
-          {([['schedule','일정'],['map','지도'],['votes','투표'],['packing','짐'],['inbox','AI']] as [Tab,string][]).map(([key,label]) => <button className={tab===key?'active':''} onClick={() => setTab(key)} key={key}>{label}</button>)}
+          {([['guide','여행'],['schedule','일정'],['map','지도'],['votes','투표'],['packing','짐'],['inbox','AI']] as [Tab,string][]).map(([key,label]) => <button className={tab===key?'active':''} onClick={() => setTab(key)} key={key}>{label}</button>)}
         </div>
         <div className="content-area">
+          {tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} />}
           {tab === 'map' && <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />}
           {tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
@@ -156,6 +158,59 @@ function TripPage({ tripId }: { tripId: string }) {
       {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={load} />}
     </main>
   );
+}
+
+function TripGuidePanel({ trip, reload }: { trip: Trip; reload: () => void }) {
+  const checklistGroups = useMemo(() => trip.checklist.reduce<Record<string, typeof trip.checklist>>((groups, item) => {
+    (groups[item.category] ||= []).push(item);
+    return groups;
+  }, {}), [trip.checklist]);
+  const transport = trip.guides.filter((item) => item.section === 'transport');
+  const rules = trip.guides.filter((item) => item.section === 'rules');
+  const connectivity = trip.guides.filter((item) => item.section === 'connectivity');
+  const done = trip.checklist.filter((item) => item.status === 'DONE').length;
+
+  async function toggleChecklist(id: string, status: string) {
+    await patch(`/api/checklist/${id}`, { status: status === 'DONE' ? 'TODO' : 'DONE' });
+    reload();
+  }
+  async function toggleReservation(id: string, status: string) {
+    await patch(`/api/restaurants/${id}`, { reservation_status: status === 'BOOKED' ? 'TODO' : 'BOOKED' });
+    reload();
+  }
+
+  return <div className="guide-page">
+    <section className="guide-hero">
+      <div><p className="eyebrow">TRIP ESSENTIALS</p><h2>출발 전부터 귀국까지, 한 화면에서.</h2><p>예약·준비 상태를 체크하고 식당 영업시간, 이동 방식, 음식 주의사항을 모바일에서 바로 확인하세요.</p></div>
+      <div className="guide-progress"><strong>{done}/{trip.checklist.length}</strong><span>출발 전 준비 완료</span></div>
+    </section>
+
+    {rules.length > 0 && <section className="guide-rule-strip">{rules.map((item) => <article key={item.id}><strong>{item.title}</strong><span>{item.details}</span></article>)}</section>}
+
+    <div className="guide-columns">
+      <section className="guide-section before-departure">
+        <div className="guide-section-head"><div><ClipboardCheck/><span><p className="eyebrow">BEFORE DEPARTURE</p><h3>출발 전 체크</h3></span></div><b>{done}/{trip.checklist.length}</b></div>
+        <div className="guide-check-groups">{Object.entries(checklistGroups).map(([category, items]) => <div key={category} className="guide-check-group"><h4>{category}</h4>{items.map((item) => <button key={item.id} className={`guide-check ${item.status === 'DONE' ? 'done' : ''}`} onClick={() => toggleChecklist(item.id, item.status)}><span className="check-ui">{item.status === 'DONE' ? <Check size={14}/> : null}</span><span><strong>{item.title}</strong>{item.notes && <small>{item.notes}</small>}</span></button>)}</div>)}</div>
+      </section>
+
+      <section className="guide-section reservations">
+        <div className="guide-section-head"><div><Utensils/><span><p className="eyebrow">RESERVATION STATUS</p><h3>식당 예약</h3></span></div></div>
+        <div className="reservation-list">{trip.restaurants.map((restaurant) => <article key={restaurant.id} className="reservation-row"><div><strong>{restaurant.name}</strong><small>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : restaurant.city}</small></div>{restaurant.reservation_action === 'WALK-IN ONLY' ? <span className="status-pill walkin">WALK-IN</span> : <button className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'todo'}`} onClick={() => toggleReservation(restaurant.id, restaurant.reservation_status)}>{restaurant.reservation_status}</button>}</article>)}</div>
+      </section>
+    </div>
+
+    <section className="guide-section transport-section">
+      <div className="guide-section-head"><div><Route/><span><p className="eyebrow">TRANSPORT</p><h3>구간별 이동</h3></span></div></div>
+      <div className="transport-grid">{transport.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div>
+    </section>
+
+    {connectivity.length > 0 && <section className="guide-section connectivity-section"><div className="guide-section-head"><div><Navigation/><span><p className="eyebrow">CONNECTIVITY · PASSES</p><h3>eSIM · ICOCA</h3></span></div></div><div className="transport-grid">{connectivity.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div></section>}
+
+    <section className="guide-section restaurant-section">
+      <div className="guide-section-head"><div><Utensils/><span><p className="eyebrow">RESTAURANTS</p><h3>식당 정보</h3></span></div></div>
+      <div className="restaurant-grid">{trip.restaurants.map((restaurant) => <article key={restaurant.id} className="restaurant-card"><header><div><span>{restaurant.city}</span><h4>{restaurant.name}</h4></div><span className={`status-pill ${restaurant.reservation_action === 'WALK-IN ONLY' ? 'walkin' : restaurant.reservation_status === 'BOOKED' ? 'booked' : 'todo'}`}>{restaurant.reservation_action === 'WALK-IN ONLY' ? 'WALK-IN' : restaurant.reservation_status}</span></header><dl><div><dt>예정</dt><dd>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : '예비'}</dd></div><div><dt>영업</dt><dd>{restaurant.hours || '현장 재확인'}</dd></div><div><dt>예산</dt><dd>{restaurant.price_range || '—'}</dd></div><div><dt>예약</dt><dd>{restaurant.reservation_action}</dd></div><div><dt>채널</dt><dd>{restaurant.reservation_channel || 'walk-in'}</dd></div></dl>{restaurant.notes && <p>{restaurant.notes}</p>}{restaurant.dietary_notes && <div className="diet-note">{restaurant.dietary_notes}</div>}</article>)}</div>
+    </section>
+  </div>;
 }
 
 function NavButton({ active, icon, label, onClick, count }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void; count?: number }) {
@@ -195,8 +250,9 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
 
 function DayColumn({ date, index, events, weather, reload }: { date: string; index: number; events: TripEvent[]; weather?: WeatherDay; reload: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${date}` });
+  const walking = events.find((event) => typeof event.meta?.daily_walking === 'string')?.meta?.daily_walking;
   return <section className={`day-column ${isOver ? 'drop-active' : ''}`} ref={setNodeRef}>
-    <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong></div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
+    <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong>{typeof walking === 'string' && <small className="day-walking">보행 {walking}</small>}</div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
     <div className="day-events">
       {events.length ? events.map((event) => <EventCard key={event.id} event={event} reload={reload} />) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
     </div>
@@ -212,10 +268,15 @@ function EventCard({ event, reload }: { event: TripEvent; reload: () => void }) 
   return <article ref={setNodeRef} style={style} className={`event-card kind-${event.kind} ${isDragging ? 'dragging' : ''}`}>
     <button className="drag-handle" {...listeners} {...attributes}><GripVertical size={16} /></button>
     <div className="event-icon">{icon}</div>
-    <div className="event-body"><div className="event-title-row"><strong>{event.title}</strong><button className="mini-delete" onClick={remove} aria-label="삭제"><Trash2 size={13} /></button></div>
+    <div className="event-body"><div className="event-title-row"><strong>{event.title}</strong>{event.source !== 'booking' && <button className="mini-delete" onClick={remove} aria-label="삭제"><Trash2 size={13} /></button>}</div>
       <div className="event-time"><input type="time" value={event.start_time || ''} onChange={(e) => changeTime(e.target.value)} />{event.end_time && <span>→ {event.end_time}</span>}</div>
       {event.location && <p><MapPin size={12} /> {event.location}</p>}
       {event.notes && <small>{event.notes}</small>}
+      {Boolean(event.meta && Object.keys(event.meta).length) && <div className="event-meta">
+        {typeof event.meta?.transport === 'string' && <span><Route size={10}/>{event.meta.transport}</span>}
+        {typeof event.meta?.walking === 'string' && <span>보행 {event.meta.walking}</span>}
+        {typeof event.meta?.rain === 'string' && <span><CloudRain size={10}/>{event.meta.rain}</span>}
+      </div>}
       <div className="event-source">{event.source === 'ai-import' ? <><Sparkles size={11}/> AI import</> : event.source === 'booking' ? 'booking' : event.source}</div>
     </div>
   </article>;

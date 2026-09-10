@@ -259,6 +259,27 @@ app.patch('/api/packing/bags/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/checklist/:id', (req, res) => {
+  const item = db.prepare('SELECT trip_id FROM trip_checklist_items WHERE id = ?').get(req.params.id) as any;
+  if (!item) return res.status(404).json({ error: 'Checklist item not found' });
+  const status = req.body.status === 'DONE' ? 'DONE' : 'TODO';
+  db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  emitTrip(item.trip_id);
+  res.json({ ok: true });
+});
+
+app.patch('/api/restaurants/:id', (req, res) => {
+  const restaurant = db.prepare('SELECT trip_id, reservation_action FROM restaurants WHERE id = ?').get(req.params.id) as any;
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const requested = String(req.body.reservation_status || '');
+  const status = restaurant.reservation_action === 'WALK-IN ONLY'
+    ? 'WALK-IN'
+    : requested === 'BOOKED' ? 'BOOKED' : 'TODO';
+  db.prepare('UPDATE restaurants SET reservation_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  emitTrip(restaurant.trip_id);
+  res.json({ ok: true });
+});
+
 async function geocodeOne(q: string) {
   try {
     const url = new URL('https://nominatim.openstreetmap.org/search');

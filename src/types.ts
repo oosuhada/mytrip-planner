@@ -65,12 +65,51 @@ export type PackingBag = {
   notes?: string | null;
 };
 
+export type TripChecklistItem = {
+  id: string;
+  title: string;
+  category: string;
+  status: 'TODO' | 'DONE' | string;
+  notes?: string | null;
+  url?: string | null;
+  sort_order: number;
+};
+
+export type Restaurant = {
+  id: string;
+  name: string;
+  city?: string | null;
+  planned_date?: string | null;
+  planned_time?: string | null;
+  hours?: string | null;
+  price_range?: string | null;
+  reservation_action: 'RESERVE NOW' | 'RESERVATION OPTIONAL' | 'WALK-IN ONLY' | string;
+  reservation_status: 'TODO' | 'BOOKED' | 'WALK-IN' | string;
+  reservation_channel?: string | null;
+  reservation_url?: string | null;
+  notes?: string | null;
+  dietary_notes?: string | null;
+  sort_order: number;
+};
+
+export type TripGuide = {
+  id: string;
+  section: string;
+  title: string;
+  subtitle?: string | null;
+  details?: string | null;
+  sort_order: number;
+};
+
 export type Trip = TripSummary & {
   participants: Participant[];
   events: TripEvent[];
   places: Place[];
   packing: PackingItem[];
   packing_bags: PackingBag[];
+  checklist: TripChecklistItem[];
+  restaurants: Restaurant[];
+  guides: TripGuide[];
 };
 
 export type WeatherDay = { date: string; code: number; max: number; min: number; rain: number };
