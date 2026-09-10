@@ -626,6 +626,7 @@ WHERE id IN (
   SELECT ds.event_id FROM decision_slots ds
   JOIN decision_options dopt ON dopt.id=ds.selected_option_id
   WHERE ds.event_id IS NOT NULL AND dopt.event_title IS NOT NULL
+    AND dopt.recommended=0
 );
 
 -- If a traveler has already changed a meal choice, restore that chosen restaurant
