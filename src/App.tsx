@@ -477,7 +477,12 @@ function RestaurantPhoto({ url, kind }: { url?: string | null; kind: 'meal' | 'v
   return <img className={kind === 'vote' ? 'vote-photo' : undefined} src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/>;
 }
 
-type AssistantChatMessage = { role: 'user'|'assistant'; content: string; ideas?: Array<{ name: string; category?: string; reason?: string; bestTime?: string; area?: string }> };
+type AssistantChatMessage = {
+  role: 'user'|'assistant';
+  content: string;
+  sections?: Array<{ title: string; items: string[] }>;
+  ideas?: Array<{ name: string; category?: string; reason?: string; bestTime?: string; area?: string }>;
+};
 
 function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: Trip; weather: WeatherDay[]; plannerName: string; reload: () => void }) {
   const [open, setOpen] = useState(false);
@@ -496,7 +501,12 @@ function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: T
     setInput(''); setMessages((prev) => [...prev, { role: 'user', content: prompt }]); setLoading(true); setOpen(true);
     try {
       const result: any = await post(`/api/trips/${trip.id}/ai/ideas`, { prompt, weather: weatherText, history });
-      setMessages((prev) => [...prev, { role: 'assistant', content: result.message || '확인했습니다.', ideas: Array.isArray(result.ideas) ? result.ideas : [] }]);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: result.message || '확인했습니다.',
+        sections: Array.isArray(result.sections) ? result.sections.filter((section: any) => section && typeof section.title === 'string' && Array.isArray(section.items)) : [],
+        ideas: Array.isArray(result.ideas) ? result.ideas : [],
+      }]);
     } catch (error) {
       setMessages((prev) => [...prev, { role: 'assistant', content: `응답을 불러오지 못했습니다: ${error instanceof Error ? error.message : 'unknown error'}` }]);
     } finally { setLoading(false); }
@@ -509,8 +519,20 @@ function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: T
   const quickPrompts = ['첫날 도착 후 선택지 정리해줘', '비 오면 일정 어떻게 바꿔?', '아직 안 한 준비 뭐야?', '오늘 식당 후보 비교해줘'];
   return <>
     <button className={`assistant-fab ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} aria-label="MyTrip Assistant 열기"><Sparkles size={18}/><span>AI Assistant</span></button>
-    {open && <aside className="assistant-panel" aria-label="MyTrip Assistant"><header><div><span className="assistant-orbit"><Sparkles size={15}/></span><div><strong>MyTrip Assistant</strong><small>전체 여행 컨텍스트 연결됨</small></div></div><button onClick={() => setOpen(false)} aria-label="Assistant 닫기"><X size={17}/></button></header><div className="assistant-context-strip"><span>KYOTO</span><span>OSAKA</span><b>{trip.events.length} 일정</b><b>{trip.places.length} 후보</b><b>{trip.checklist.filter((item) => item.status !== 'DONE').length} 준비 남음</b></div><div className="assistant-quick">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div><div className="assistant-messages" ref={messagesRef}>{messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'assistant' ? 'AI' : plannerName || '나'}</span><p>{message.content}</p>{message.ideas?.length ? <div className="assistant-ideas">{message.ideas.map((idea) => <article key={`${idea.name}-${idea.bestTime || ''}`}><div><strong>{idea.name}</strong>{idea.area && <small>{idea.area}</small>}</div>{idea.reason && <p>{idea.reason}</p>}<footer>{idea.bestTime && <span>{idea.bestTime}</span>}<button disabled={savedNames.has(idea.name)} onClick={() => saveIdea(idea)}><Heart size={11}/>{savedNames.has(idea.name) ? '후보에 있음' : '후보 저장'}</button></footer></article>)}</div> : null}</div>)}{loading && <div className="assistant-message assistant loading"><span>AI</span><p>현재 일정과 후보를 같이 확인하는 중…</p></div>}</div><div className="assistant-composer"><textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') ask(); }} placeholder="예: 9/14 비 오면 Kiyomizu를 줄이고 어디로 가?"/><button onClick={() => ask()} disabled={loading || !input.trim()}><Send size={16}/></button><small>⌘/Ctrl + Enter · 현재 일정/식당/투표/준비물 상태를 자동 참조</small></div></aside>}
+    {open && <aside className="assistant-panel" aria-label="MyTrip Assistant"><header><div><span className="assistant-orbit"><Sparkles size={17}/></span><div><strong>MyTrip Assistant</strong><small>전체 여행 컨텍스트 연결됨</small></div></div><button onClick={() => setOpen(false)} aria-label="Assistant 닫기"><X size={20}/></button></header><div className="assistant-context-strip"><span>KYOTO</span><span>OSAKA</span><b>{trip.events.length} 일정</b><b>{trip.places.length} 후보</b><b>{trip.checklist.filter((item) => item.status !== 'DONE').length} 준비 남음</b></div><div className="assistant-quick">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div><div className="assistant-messages" ref={messagesRef}>{messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'assistant' ? 'AI' : plannerName || '나'}</span><AssistantMessageBody content={message.content} />{message.sections?.length ? <div className="assistant-sections">{message.sections.map((section, sectionIndex) => <section key={`${section.title}-${sectionIndex}`}><h4>{section.title}</h4><ol>{section.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}>{item}</li>)}</ol></section>)}</div> : null}{message.ideas?.length ? <div className="assistant-ideas">{message.ideas.map((idea) => <article key={`${idea.name}-${idea.bestTime || ''}`}><div><strong>{idea.name}</strong>{idea.area && <small>{idea.area}</small>}</div>{idea.reason && <p>{idea.reason}</p>}<footer>{idea.bestTime && <span>{idea.bestTime}</span>}<button disabled={savedNames.has(idea.name)} onClick={() => saveIdea(idea)}><Heart size={13}/>{savedNames.has(idea.name) ? '후보에 있음' : '후보 저장'}</button></footer></article>)}</div> : null}</div>)}{loading && <div className="assistant-message assistant loading"><span>AI</span><div className="assistant-message-copy">현재 일정과 후보를 같이 확인하는 중…</div></div>}</div><div className="assistant-composer"><textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') ask(); }} placeholder="예: 9/14 비 오면 Kiyomizu를 줄이고 어디로 가?"/><button onClick={() => ask()} disabled={loading || !input.trim()}><Send size={18}/></button><small>⌘/Ctrl + Enter · 현재 일정/식당/투표/준비물 상태를 자동 참조</small></div></aside>}
   </>;
+}
+
+function AssistantMessageBody({ content }: { content: string }) {
+  const normalized = content.trim();
+  const numbered = [...normalized.matchAll(/(?:^|\s)(\d+)\)\s*([^]+?)(?=(?:\s\d+\)\s)|$)/g)];
+  if (numbered.length >= 2) {
+    const firstListIndex = normalized.search(/(?:^|\s)1\)\s/);
+    const intro = firstListIndex > 0 ? normalized.slice(0, firstListIndex).trim().replace(/[:：]\s*$/, '') : '';
+    return <div className="assistant-message-copy">{intro && <p>{intro}</p>}<ol>{numbered.map((match) => <li key={`${match[1]}-${match.index}`}>{match[2].trim()}</li>)}</ol></div>;
+  }
+  const paragraphs = normalized.split(/\n{2,}/).map((value) => value.trim()).filter(Boolean);
+  return <div className="assistant-message-copy">{paragraphs.map((paragraph, index) => <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>)}</div>;
 }
 
 function PackingPanel({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
