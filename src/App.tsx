@@ -183,7 +183,7 @@ function TripPage({ tripId }: { tripId: string }) {
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
         <div className="content-area">
-          {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} reload={load} />}
+          {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} reload={load} onOpenTab={selectTab} />}
           {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
@@ -319,7 +319,7 @@ function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { 
   </header>;
 }
 
-function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
+function TripLivePanel({ trip, weather, reload, onOpenTab }: { trip: Trip; weather: WeatherDay[]; reload: () => void; onOpenTab: (tab: Tab) => void }) {
   const today = todayInTimeZone('Asia/Tokyo');
   const active = today >= trip.start_date && today <= trip.end_date;
   const focusDate = active ? today : trip.start_date;
@@ -341,6 +341,34 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
   const restaurants = new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const));
   const decisions = (trip.decision_slots || []).filter((slot) => slot.date === focusDate);
   const reservationRows = mealSlots.map((slot) => ({ slot, restaurant: slot.selected_restaurant_id ? restaurants.get(slot.selected_restaurant_id) : undefined })).filter((row) => row.restaurant);
+  const dayWeather = weather.find((item) => item.date === focusDate);
+  const progressEvents = events.filter((event) => event.start_time);
+  const completedCount = active ? progressEvents.filter((event) => {
+    const finish = event.end_time || event.start_time;
+    return Boolean(finish && finish < now);
+  }).length : 0;
+  const dayProgress = progressEvents.length ? Math.min(100, Math.round((completedCount / progressEvents.length) * 100)) : 0;
+  const walkingTarget = events.find((event) => typeof event.meta?.daily_walking === 'string')?.meta?.daily_walking;
+  const nextEvent = nextIndex >= 0 ? events[nextIndex] : undefined;
+  const nextMealSlot = active ? mealSlots.find((slot) => !slot.time || slot.time >= now) : mealSlots[0];
+  const nextMeal = nextMealSlot?.selected_restaurant_id ? restaurants.get(nextMealSlot.selected_restaurant_id) : undefined;
+  const hotelTransitions = trip.events
+    .filter((event) => event.kind === 'hotel' && event.location && event.start_time && !/check-out/i.test(event.title))
+    .sort((a, b) => `${a.date} ${a.start_time || '00:00'}`.localeCompare(`${b.date} ${b.start_time || '00:00'}`));
+  const focusMoment = `${focusDate} ${active ? now : '23:59'}`;
+  const currentHotel = [...hotelTransitions].reverse().find((event) => `${event.date} ${event.start_time || '00:00'}` <= focusMoment)
+    || hotelTransitions.find((event) => event.date === focusDate)
+    || hotelTransitions[0];
+  const nextMapUrl = nextEvent ? googleMapsEventUrl(nextEvent) : null;
+  const hotelMapUrl = currentHotel ? googleMapsEventUrl(currentHotel) : null;
+  const nextTransport = typeof nextEvent?.meta?.transport === 'string' ? nextEvent.meta.transport : null;
+  const nextWalking = typeof nextEvent?.meta?.walking === 'string' ? nextEvent.meta.walking : null;
+  const rainLevel = dayWeather ? Math.round(dayWeather.rain) : null;
+  const fieldAlert = dayWeather && dayWeather.rain >= 60
+    ? '강한 비 가능성 · 야외 한 곳은 빼도 괜찮게 움직이기'
+    : dayWeather && dayWeather.max >= 30
+      ? '더운 날씨 · 물 자주 마시고 실내 휴식 구간 유지'
+      : '일정 사이 휴식을 남겨두고 무리하지 않기';
   async function selectPlanB(slotId: string, optionId: string) {
     await patch(`/api/decision-slots/${slotId}/select`, { option_id: optionId });
     reload();
@@ -353,6 +381,50 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
   return <div className="trip-live-page">
     <section className="trip-live-hero">
       <div><p className="eyebrow">{active ? 'LIVE TRIP' : 'TRIP MODE PREVIEW'} · {formatDay(focusDate)}</p><h2>{active ? '지금 필요한 것만.' : '여행 중 화면 미리보기'}</h2><p>{active ? `${now} 일본 시간 기준으로 현재·다음 일정과 바로 쓸 정보만 보여줍니다.` : '출발하면 이 화면이 기본으로 열리고 오늘 날짜 일정에 자동 맞춰집니다.'}</p></div>
+    </section>
+
+    <section className="trip-field-dashboard" aria-label="오늘 여행 현황">
+      <div className="trip-field-progress">
+        <div><span><Navigation size={15}/>오늘 진행</span><strong>{active ? `${completedCount}/${progressEvents.length}` : `${events.length}개 일정`}</strong></div>
+        <div className="trip-progress-track"><i style={{ width: `${dayProgress}%` }}/></div>
+        <small>{active ? `${dayProgress}% 진행 · 현재 이후 ${remainingCount}개` : 'TRIP 모드에서 당일 진행률이 자동 표시됩니다.'}</small>
+      </div>
+      <div className="trip-field-stat"><span><Route size={15}/>보행 목표</span><strong>{typeof walkingTarget === 'string' ? walkingTarget : '여유 있게'}</strong><small>10k steps 크게 넘기지 않기</small></div>
+      <div className="trip-field-stat"><span><CloudRain size={15}/>오늘 날씨</span><strong>{dayWeather ? `${Math.round(dayWeather.max)}° / ${Math.round(dayWeather.min)}°` : '예보 확인 중'}</strong><small>{rainLevel !== null ? `강수 ${rainLevel}%` : '날씨 탭에서 확인'}</small></div>
+      <div className="trip-field-alert"><CloudRain size={16}/><span>{fieldAlert}</span></div>
+    </section>
+
+    <section className="trip-command-center">
+      <div className="trip-section-heading"><div><Compass/><span><p className="eyebrow">FIELD COMMAND</p><h3>현장에서 바로 쓰기</h3></span></div><b>지도 · 식사 · 숙소를 한 번에</b></div>
+      <div className="trip-command-grid">
+        <article className="trip-command-card primary-card">
+          <header><span><Navigation size={16}/>다음 이동</span>{nextEvent?.start_time && <b>{nextEvent.start_time}</b>}</header>
+          <h4>{nextEvent?.title || '오늘 일정 종료'}</h4>
+          {nextEvent?.location && <p>{nextEvent.location}</p>}
+          {(nextTransport || nextWalking) && <small>{[nextTransport, nextWalking].filter(Boolean).join(' · ')}</small>}
+          <footer>{nextMapUrl && <a href={nextMapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>지도 열기</a>}{nextEvent?.address && <button onClick={() => navigator.clipboard?.writeText(nextEvent.address || '')}><Copy size={13}/>주소 복사</button>}</footer>
+        </article>
+        <article className="trip-command-card">
+          <header><span><Utensils size={16}/>다음 식사</span>{nextMealSlot?.time && <b>{nextMealSlot.time}</b>}</header>
+          <h4>{nextMeal?.name || nextMealSlot?.label || '식사 후보 확인'}</h4>
+          <p>{nextMeal ? [nextMeal.price_range, nextMeal.hours].filter(Boolean).join(' · ') : '선택된 식당이 없어요.'}</p>
+          {nextMeal?.dietary_notes && <small>{nextMeal.dietary_notes}</small>}
+          <footer>{nextMeal?.google_maps_url && <a href={nextMeal.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={14}/>식당 지도</a>}{nextMeal?.menu_url && <a href={nextMeal.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}</footer>
+        </article>
+        <article className="trip-command-card">
+          <header><span><BedDouble size={16}/>오늘 숙소</span></header>
+          <h4>{currentHotel?.location || currentHotel?.title || '숙소 확인'}</h4>
+          {currentHotel?.address && <p>{currentHotel.address}</p>}
+          <small>피곤하거나 비가 세면 숙소 복귀를 우선</small>
+          <footer>{hotelMapUrl && <a href={hotelMapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>숙소 지도</a>}{currentHotel?.address && <button onClick={() => navigator.clipboard?.writeText(currentHotel.address || '')}><Copy size={13}/>주소 복사</button>}</footer>
+        </article>
+      </div>
+      <div className="trip-quick-actions" aria-label="TRIP 빠른 메뉴">
+        <button onClick={() => onOpenTab('schedule')}><CalendarDays size={15}/><span>전체 일정</span></button>
+        <button onClick={() => onOpenTab('trip-weather')}><CloudRain size={15}/><span>날씨 · 코디</span></button>
+        <button onClick={() => onOpenTab('phrases')}><MessageCircle size={15}/><span>일본어 표현</span></button>
+        {hotelMapUrl ? <a href={hotelMapUrl} target="_blank" rel="noreferrer"><BedDouble size={15}/><span>숙소로 이동</span></a> : <button onClick={() => onOpenTab('map')}><MapPin size={15}/><span>지도</span></button>}
+      </div>
     </section>
 
     <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><div className="trip-scroll-controls"><b>{remainingCount > 0 ? `현재 이후 ${remainingCount}개` : '오늘 일정 종료'}</b><button onClick={() => scrollLiveEvents(-1)} aria-label="이전 일정"><ArrowLeft size={15}/></button><button onClick={() => scrollLiveEvents(1)} aria-label="다음 일정"><ChevronRight size={15}/></button></div></div><div className="trip-live-events" ref={liveEventRef}>{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const eventIndex = liveStartIndex + index; const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; const liveLabel = isNow ? 'NOW' : eventIndex === contextIndex ? 'PREV' : eventIndex === nextIndex ? 'NEXT' : 'THEN'; return <article className={`trip-live-event ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{liveLabel}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
