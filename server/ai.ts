@@ -39,11 +39,20 @@ export async function generateTripIdeas(input: {
   prompt: string;
   weather?: string;
   existing?: string[];
+  context?: unknown;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }) {
   if (aiEnabled()) {
     try {
       const result = await callOpenAI(
-        `You are a concise collaborative trip-planning copilot. Suggest practical ideas grounded in the supplied destination, dates, weather and existing places. Return strict JSON only: {"message":"...","ideas":[{"name":"...","category":"...","reason":"...","bestTime":"...","area":"..."}]}. Give 3-6 ideas. Avoid claiming live opening hours unless provided.`,
+        `You are MyTrip Assistant, the persistent assistant for one specific trip. The supplied trip context is the source of truth for confirmed bookings, itinerary times, selected meal candidates, votes, transport decisions, packing/checklist state, traveler food constraints and researched alternatives. Answer the user's question directly and take the whole trip into account, including conflicts between days and walking/rain constraints. Do not invent live availability, current opening hours or prices beyond what the context explicitly supplies. If a user asks for a recommendation, prefer researched candidates already in the context and explain where they fit.
+
+The context includes interaction_mode and japan_now. When interaction_mode is "plan", optimize for pre-trip planning, comparison, reservations, packing and itinerary editing across all days. When interaction_mode is "trip", prioritize the Japan-local current day/time, the user's immediate next action, the selected itinerary, weather/rain fallback, nearby Plan B choices, reservations and practical navigation. In trip mode, keep answers action-oriented and avoid surfacing pre-departure chores unless the user explicitly asks for them.
+
+Return strict JSON only with this shape:
+{"message":"A short 1–3 sentence takeaway, no giant paragraph and no numbered list embedded in this string.","sections":[{"title":"Short section heading","items":["One concise actionable item","Another concise item"]}],"ideas":[{"name":"...","category":"...","reason":"...","bestTime":"...","area":"..."}]}.
+
+Use 1–3 sections when the answer benefits from structure (for example 권장 순서, 주의할 점, 이동/식사). Put ordered recommendations into sections.items rather than packing '1) 2) 3)' into message. Keep each item concise enough to scan on a phone. sections may be an empty array for a simple answer. ideas may be an empty array when the question is informational; otherwise return at most 6 actionable candidate ideas.`,
         JSON.stringify(input),
       );
       const parsed = JSON.parse(stripCodeFence(result));
@@ -131,7 +140,13 @@ function fallbackParse(raw: string): { parser: string; events: ParsedEvent[]; su
   };
 }
 
-function fallbackIdeas(input: { destination: string; prompt: string }) {
+function fallbackIdeas(input: { destination: string; prompt: string; context?: any }) {
+  if (input.context) {
+    const incomplete = Array.isArray(input.context.checklist) ? input.context.checklist.filter((item: any) => item.status !== 'DONE').slice(0, 5) : [];
+    if (/준비|체크|해야|남았/i.test(input.prompt) && incomplete.length) {
+      return { provider: 'local', message: `아직 완료되지 않은 준비는 ${incomplete.map((item: any) => item.title).join(', ')} 등이 있습니다.`, ideas: [] };
+    }
+  }
   const kyoto = /kyoto|교토/i.test(input.destination);
   const ideas = kyoto ? [
     { name: 'Philosopher’s Path', category: 'walk', reason: '아침 산책용으로 일정 밀도가 낮고 동선 조정이 쉽습니다.', bestTime: 'morning', area: 'Higashiyama' },

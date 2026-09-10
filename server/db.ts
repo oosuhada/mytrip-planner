@@ -160,12 +160,136 @@ CREATE TABLE IF NOT EXISTS trip_guides (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trip_guides_trip ON trip_guides(trip_id, section, sort_order);
+
+CREATE TABLE IF NOT EXISTS trip_options (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  group_key TEXT NOT NULL,
+  group_title TEXT NOT NULL,
+  name TEXT NOT NULL,
+  price TEXT,
+  coverage TEXT,
+  fit TEXT,
+  verdict TEXT,
+  purchase_url TEXT,
+  source_url TEXT,
+  action_label TEXT,
+  recommended INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_options_trip ON trip_options(trip_id, group_key, sort_order);
+
+CREATE TABLE IF NOT EXISTS restaurant_links (
+  restaurant_id TEXT PRIMARY KEY REFERENCES restaurants(id) ON DELETE CASCADE,
+  place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  google_maps_url TEXT,
+  menu_url TEXT,
+  image_url TEXT,
+  source_url TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_restaurant_links_place ON restaurant_links(place_id);
+
+CREATE TABLE IF NOT EXISTS meal_slots (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  time TEXT,
+  label TEXT NOT NULL,
+  meal_type TEXT,
+  area TEXT,
+  event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+  selected_restaurant_id TEXT REFERENCES restaurants(id) ON DELETE SET NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_meal_slots_trip ON meal_slots(trip_id, date, sort_order);
+
+CREATE TABLE IF NOT EXISTS meal_slot_options (
+  meal_slot_id TEXT NOT NULL REFERENCES meal_slots(id) ON DELETE CASCADE,
+  restaurant_id TEXT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(meal_slot_id, restaurant_id)
+);
+
+CREATE TABLE IF NOT EXISTS checklist_packing_links (
+  checklist_id TEXT NOT NULL REFERENCES trip_checklist_items(id) ON DELETE CASCADE,
+  packing_id TEXT NOT NULL REFERENCES packing_items(id) ON DELETE CASCADE,
+  PRIMARY KEY(checklist_id, packing_id)
+);
+
+CREATE TABLE IF NOT EXISTS place_research (
+  place_id TEXT PRIMARY KEY REFERENCES places(id) ON DELETE CASCADE,
+  region TEXT NOT NULL,
+  suggested_dates_json TEXT NOT NULL DEFAULT '[]',
+  best_time TEXT,
+  area TEXT,
+  source_url TEXT,
+  image_url TEXT,
+  research_note TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS decision_slots (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  time TEXT,
+  region TEXT NOT NULL,
+  section_type TEXT NOT NULL DEFAULT 'activity',
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+  selected_option_id TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_slots_trip ON decision_slots(trip_id, date, sort_order);
+
+CREATE TABLE IF NOT EXISTS decision_options (
+  id TEXT PRIMARY KEY,
+  decision_slot_id TEXT NOT NULL REFERENCES decision_slots(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  badge TEXT,
+  summary TEXT,
+  price TEXT,
+  duration TEXT,
+  route TEXT,
+  map_url TEXT,
+  source_url TEXT,
+  recommended INTEGER NOT NULL DEFAULT 0,
+  event_title TEXT,
+  event_kind TEXT,
+  event_start_time TEXT,
+  event_end_time TEXT,
+  event_location TEXT,
+  event_notes TEXT,
+  event_meta_json TEXT NOT NULL DEFAULT '{}',
+  hidden_event_ids_json TEXT NOT NULL DEFAULT '[]',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_options_slot ON decision_options(decision_slot_id, sort_order);
 `);
 
 ensureColumn('packing_items', 'bag_id', 'TEXT');
 ensureColumn('packing_items', 'quantity', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('packing_items', 'weight_kg', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('packing_items', 'source', "TEXT NOT NULL DEFAULT 'manual'");
+ensureColumn('place_research', 'image_url', 'TEXT');
 
 export const id = () => crypto.randomUUID();
 
@@ -187,19 +311,129 @@ export function getTrip(tripId: string) {
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId);
   if (!trip) return null;
   const participants = db.prepare('SELECT * FROM participants WHERE trip_id = ? ORDER BY created_at').all(tripId);
-  const events = db.prepare('SELECT * FROM events WHERE trip_id = ? ORDER BY date, COALESCE(start_time, \'99:99\'), sort_order, created_at').all(tripId)
+  const rawEvents = db.prepare('SELECT * FROM events WHERE trip_id = ? ORDER BY date, COALESCE(start_time, \'99:99\'), sort_order, created_at').all(tripId)
     .map((row: any) => ({ ...row, meta: safeJson(row.meta_json) }));
-  const places = db.prepare(`
+  const rawPlaces = db.prepare(`
     SELECT p.*, COALESCE(SUM(v.value), 0) AS vote_score, COUNT(v.id) AS vote_count
     FROM places p LEFT JOIN votes v ON v.place_id = p.id
     WHERE p.trip_id = ? GROUP BY p.id ORDER BY vote_score DESC, p.created_at
   `).all(tripId);
-  const packing = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at').all(tripId);
-  const packing_bags = db.prepare('SELECT * FROM packing_bags WHERE trip_id = ? ORDER BY created_at').all(tripId);
-  const checklist = db.prepare('SELECT * FROM trip_checklist_items WHERE trip_id = ? ORDER BY sort_order, created_at').all(tripId);
-  const restaurants = db.prepare('SELECT * FROM restaurants WHERE trip_id = ? ORDER BY COALESCE(planned_date, \'9999-12-31\'), sort_order, created_at').all(tripId);
+  const rawPacking = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at').all(tripId) as any[];
+  const packing_bags = db.prepare(`
+    SELECT * FROM packing_bags WHERE trip_id = ?
+    ORDER BY CASE name
+      WHEN '여권지갑' THEN 10
+      WHEN '기내용 백팩' THEN 20
+      WHEN '기내용 캐리어' THEN 30
+      WHEN '체크인 캐리어' THEN 40
+      WHEN '데일리 보조가방' THEN 50
+      ELSE 90 END, created_at
+  `).all(tripId);
+  const rawChecklist = db.prepare('SELECT * FROM trip_checklist_items WHERE trip_id = ? ORDER BY sort_order, created_at').all(tripId) as any[];
+  const checklistPackingLinks = db.prepare(`
+    SELECT cpl.* FROM checklist_packing_links cpl
+    JOIN trip_checklist_items c ON c.id = cpl.checklist_id WHERE c.trip_id = ?
+  `).all(tripId) as any[];
+  const packingIdsByChecklist = new Map<string, string[]>();
+  const checklistIdsByPacking = new Map<string, string[]>();
+  for (const link of checklistPackingLinks) {
+    const list = packingIdsByChecklist.get(link.checklist_id) || [];
+    list.push(link.packing_id);
+    packingIdsByChecklist.set(link.checklist_id, list);
+    const reverse = checklistIdsByPacking.get(link.packing_id) || [];
+    reverse.push(link.checklist_id);
+    checklistIdsByPacking.set(link.packing_id, reverse);
+  }
+  const checklist = rawChecklist.map((item) => ({ ...item, packing_ids: packingIdsByChecklist.get(item.id) || [] }));
+  const packing = rawPacking.map((item) => ({ ...item, checklist_ids: checklistIdsByPacking.get(item.id) || [] }));
+  const restaurants = db.prepare('SELECT * FROM restaurants WHERE trip_id = ? ORDER BY COALESCE(planned_date, \'9999-12-31\'), sort_order, created_at').all(tripId) as any[];
   const guides = db.prepare('SELECT * FROM trip_guides WHERE trip_id = ? ORDER BY section, sort_order, created_at').all(tripId);
-  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants, guides };
+  const options = db.prepare('SELECT * FROM trip_options WHERE trip_id = ? ORDER BY group_key, sort_order, created_at').all(tripId);
+  const restaurantLinks = db.prepare(`
+    SELECT rl.*, COALESCE(SUM(v.value), 0) AS vote_score, COUNT(v.id) AS vote_count
+    FROM restaurant_links rl
+    JOIN restaurants r ON r.id = rl.restaurant_id
+    JOIN places p ON p.id = rl.place_id
+    LEFT JOIN votes v ON v.place_id = p.id
+    WHERE r.trip_id = ? GROUP BY rl.restaurant_id
+  `).all(tripId) as any[];
+  const linkByRestaurant = new Map(restaurantLinks.map((link) => [link.restaurant_id, link]));
+  const restaurantByPlace = new Map(restaurantLinks.map((link) => [link.place_id, link.restaurant_id]));
+  const richRestaurants = restaurants.map((restaurant) => ({ ...restaurant, ...(linkByRestaurant.get(restaurant.id) || {}) }));
+  const mealSlots = db.prepare('SELECT * FROM meal_slots WHERE trip_id = ? ORDER BY date, sort_order, created_at').all(tripId) as any[];
+  const mealSlotOptions = db.prepare(`
+    SELECT mso.* FROM meal_slot_options mso
+    JOIN meal_slots ms ON ms.id = mso.meal_slot_id
+    WHERE ms.trip_id = ? ORDER BY ms.date, ms.sort_order, mso.sort_order
+  `).all(tripId) as any[];
+  const optionIdsBySlot = new Map<string, string[]>();
+  for (const option of mealSlotOptions) {
+    const list = optionIdsBySlot.get(option.meal_slot_id) || [];
+    list.push(option.restaurant_id);
+    optionIdsBySlot.set(option.meal_slot_id, list);
+  }
+  const richMealSlots = mealSlots.map((slot) => ({ ...slot, option_ids: optionIdsBySlot.get(slot.id) || [] }));
+  const decisionSlots = db.prepare('SELECT * FROM decision_slots WHERE trip_id = ? ORDER BY date, sort_order, created_at').all(tripId) as any[];
+  const decisionOptions = db.prepare(`
+    SELECT dopt.* FROM decision_options dopt
+    JOIN decision_slots ds ON ds.id = dopt.decision_slot_id
+    WHERE ds.trip_id = ? ORDER BY ds.date, ds.sort_order, dopt.sort_order
+  `).all(tripId) as any[];
+  const decisionOptionsBySlot = new Map<string, any[]>();
+  for (const option of decisionOptions) {
+    const list = decisionOptionsBySlot.get(option.decision_slot_id) || [];
+    list.push({ ...option, hidden_event_ids: safeJson(option.hidden_event_ids_json), event_meta: safeJson(option.event_meta_json) });
+    decisionOptionsBySlot.set(option.decision_slot_id, list);
+  }
+  const richDecisionSlots = decisionSlots.map((slot) => ({ ...slot, options: decisionOptionsBySlot.get(slot.id) || [] }));
+  const hiddenEventIds = new Set<string>();
+  for (const slot of richDecisionSlots) {
+    const selected = slot.options.find((option: any) => option.id === slot.selected_option_id);
+    for (const eventId of selected?.hidden_event_ids || []) hiddenEventIds.add(eventId);
+  }
+  const events = rawEvents.filter((event: any) => !hiddenEventIds.has(event.id));
+  const placeResearchRows = db.prepare('SELECT * FROM place_research WHERE place_id IN (SELECT id FROM places WHERE trip_id = ?)').all(tripId) as any[];
+  const researchByPlace = new Map(placeResearchRows.map((row) => [row.place_id, row]));
+  const places = (rawPlaces as any[]).map((place) => {
+    const research = researchByPlace.get(place.id);
+    return {
+      ...place,
+      restaurant_id: restaurantByPlace.get(place.id) || null,
+      research: research ? {
+        region: research.region,
+        suggested_dates: safeJson(research.suggested_dates_json),
+        best_time: research.best_time,
+        area: research.area,
+        source_url: research.source_url,
+        image_url: research.image_url,
+        note: research.research_note,
+        sort_order: research.sort_order,
+      } : null,
+    };
+  });
+  const eventImageCandidates = [
+    { name: 'HARUKA', image_url: 'https://www.westjr.co.jp/travel-information/assets/img/common/ogp.webp', source_url: 'https://www.westjr.co.jp/travel-information/en/tickets-passes/oneway/haruka/' },
+    { name: 'Fushimi Inari', image_url: 'https://inari.jp/en/wp-content/uploads/2015/09/index_mainvisual.jpg', source_url: 'https://inari.jp/en/' },
+    { name: 'Nipponbashi Crystal Hotel', image_url: 'https://crystalhotel.jp/en/wp-content/uploads/2024/02/0I2A0405.jpg', source_url: 'https://crystalhotel.jp/en/nipponbashi/' },
+    ...richRestaurants.filter((restaurant: any) => restaurant.image_url).map((restaurant: any) => ({
+      name: restaurant.name,
+      image_url: restaurant.image_url,
+      source_url: restaurant.source_url || restaurant.menu_url || restaurant.google_maps_url,
+    })),
+    ...places.filter((place: any) => place.research?.image_url).map((place: any) => ({
+      name: place.name,
+      image_url: place.research.image_url,
+      source_url: place.research.source_url,
+    })),
+  ];
+  const eventsWithImages = events.map((event: any) => {
+    const haystack = `${event.title || ''} ${event.location || ''}`.toLowerCase();
+    const match = eventImageCandidates
+      .filter((candidate) => candidate.name && haystack.includes(String(candidate.name).toLowerCase()))
+      .sort((a, b) => String(b.name).length - String(a.name).length)[0];
+    return match ? { ...event, image_url: match.image_url, image_source_url: match.source_url } : event;
+  });
+  return { ...(trip as object), participants, events: eventsWithImages, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots, decision_slots: richDecisionSlots };
 }
 
 function safeJson(value: string) {
@@ -297,11 +531,13 @@ function normalizeKyotoTrip(tripId: string) {
 function seedPackingTemplate(tripId: string) {
   const bagRows = db.prepare('SELECT * FROM packing_bags WHERE trip_id = ?').all(tripId) as any[];
   const bagByName = new Map(bagRows.map((bag) => [bag.name, bag.id]));
+  const hadCabinSuitcase = bagByName.has('기내용 캐리어');
   const bagStmt = db.prepare('INSERT INTO packing_bags (id, trip_id, name, kind, owner, weight_limit, notes) VALUES (?, ?, ?, ?, ?, ?, ?)');
   const bags = [
     ['여권지갑', 'documents', 'Oosu', null, '여권·카드·바우처 같이 즉시 꺼내는 서류류'],
     ['기내용 백팩', 'cabin', 'Oosu', 10, 'ICN → KIX / KIX → ICN 기내 수하물 10kg 기준'],
-    ['체크인 캐리어', 'checked', 'Oosu', 15, '출국편 15kg. 귀국편 위탁수하물 0kg이므로 귀국 전 재배치 필요'],
+    ['기내용 캐리어', 'cabin-suitcase', 'Oosu', 10, '이번 여행 메인 캐리어. 체크인하지 않고 기내 반입 기준으로 구성'],
+    ['체크인 캐리어', 'checked', 'Oosu', 15, '이번 여행에서는 사용하지 않는 예비 가방. 항목을 배정하지 않음'],
     ['데일리 보조가방', 'daily', 'Oosu', null, '현지 이동용 크로스백/보조가방'],
   ] as const;
   for (const [name, kind, owner, limit, notes] of bags) {
@@ -309,6 +545,13 @@ function seedPackingTemplate(tripId: string) {
     const bagId = id();
     bagStmt.run(bagId, tripId, name, kind, owner, limit, notes);
     bagByName.set(name, bagId);
+  }
+
+  // One-time upgrade for databases created before the cabin-suitcase split.
+  // Once the new bag exists, later manual assignments are left untouched.
+  if (!hadCabinSuitcase && bagByName.get('기내용 캐리어') && bagByName.get('체크인 캐리어')) {
+    db.prepare('UPDATE packing_items SET bag_id = ? WHERE trip_id = ? AND bag_id = ?')
+      .run(bagByName.get('기내용 캐리어'), tripId, bagByName.get('체크인 캐리어'));
   }
 
   const existing = new Set((db.prepare('SELECT label FROM packing_items WHERE trip_id = ?').all(tripId) as any[]).map((item) => item.label));
@@ -328,7 +571,7 @@ function seedPackingTemplate(tripId: string) {
     ['헤드폰 / 이어폰', '전자기기', '기내용 백팩', '비행 및 이동'],
     ['휴대폰 충전기', '전자기기', '기내용 백팩', '매일 사용하는 충전기'],
     ['보조배터리', '전자기기', '기내용 백팩', '배터리는 위탁보다 기내 휴대'],
-    ['멀티어댑터', '전자기기', '체크인 캐리어', '숙소 충전 환경 대비'],
+    ['멀티어댑터', '전자기기', '기내용 캐리어', '숙소 충전 환경 대비'],
     ['태블릿 / ebook 리더', '전자기기', '기내용 백팩', '선택 항목'],
     ['노트북', '전자기기', '기내용 백팩', '필요한 경우만'],
     ['짐벌 / 카메라', '전자기기', '기내용 백팩', '촬영 계획이 있을 때'],
@@ -336,26 +579,26 @@ function seedPackingTemplate(tripId: string) {
     ['비행용 슬리퍼', '기내', '기내용 백팩', '장거리 대기·기내 편의'],
     ['상비약 / 영양제', '건강', '기내용 백팩', '필수 복용분은 기내 휴대'],
     ['설사약 / 유산균', '건강', '기내용 백팩', '여행 중 위장 컨디션 대비'],
-    ['속옷', '의류 · 신발', '체크인 캐리어', '여행 일수 + 여유분'],
-    ['양말', '의류 · 신발', '체크인 캐리어', '도보 일정 교체용'],
-    ['잠옷', '의류 · 신발', '체크인 캐리어', '숙소용'],
-    ['가볍고 통기성 좋은 상의', '의류 · 신발', '체크인 캐리어', '9월 더위와 도보 일정'],
-    ['편한 바지', '의류 · 신발', '체크인 캐리어', '장시간 도보에 적합'],
-    ['얇은 재킷 / 가디건', '의류 · 신발', '체크인 캐리어', '냉방·저녁 시간 대비'],
+    ['속옷', '의류 · 신발', '기내용 캐리어', '여행 일수 + 여유분'],
+    ['양말', '의류 · 신발', '기내용 캐리어', '도보 일정 교체용'],
+    ['잠옷', '의류 · 신발', '기내용 캐리어', '숙소용'],
+    ['가볍고 통기성 좋은 상의', '의류 · 신발', '기내용 캐리어', '9월 더위와 도보 일정'],
+    ['편한 바지', '의류 · 신발', '기내용 캐리어', '장시간 도보에 적합'],
+    ['얇은 재킷 / 가디건', '의류 · 신발', '기내용 캐리어', '냉방·저녁 시간 대비'],
     ['편한 워킹화', '의류 · 신발', '데일리 보조가방', '교토·오사카 도보 중심 일정'],
-    ['여벌 신발 / 샌들', '의류 · 신발', '체크인 캐리어', '비 또는 발 피로 대비'],
+    ['여벌 신발 / 샌들', '의류 · 신발', '기내용 캐리어', '비 또는 발 피로 대비'],
     ['선글라스 / 모자', '액세서리', '데일리 보조가방', '낮 시간 햇빛 대비'],
     ['접이식 우산', '액세서리', '데일리 보조가방', '예보 강수 대비'],
-    ['지퍼백', '생활', '체크인 캐리어', '젖은 물건·액체류 분리'],
-    ['빨래망 / 소량 세제', '생활', '체크인 캐리어', '여행 중 간단 세탁'],
-    ['치약 · 칫솔', '세면도구', '체크인 캐리어', '기본 세면'],
-    ['클렌징용품', '세면도구', '체크인 캐리어', '개인 루틴'],
-    ['샴푸 · 린스', '세면도구', '체크인 캐리어', '숙소 어메니티 대체용'],
-    ['바디워시 / 샤워볼', '세면도구', '체크인 캐리어', '개인 선호 시'],
-    ['면도기', '세면도구', '체크인 캐리어', '그루밍'],
+    ['지퍼백', '생활', '기내용 캐리어', '젖은 물건·액체류 분리'],
+    ['빨래망 / 소량 세제', '생활', '기내용 캐리어', '여행 중 간단 세탁'],
+    ['치약 · 칫솔', '세면도구', '기내용 캐리어', '기본 세면'],
+    ['클렌징용품', '세면도구', '기내용 캐리어', '개인 루틴'],
+    ['샴푸 · 린스', '세면도구', '기내용 캐리어', '숙소 어메니티 대체용'],
+    ['바디워시 / 샤워볼', '세면도구', '기내용 캐리어', '개인 선호 시'],
+    ['면도기', '세면도구', '기내용 캐리어', '그루밍'],
     ['선스크린', '세면도구', '데일리 보조가방', '낮 시간 야외 이동'],
-    ['향수 / 왁스', '세면도구', '체크인 캐리어', '선택 항목'],
-    ['손톱깎이 / 면봉', '세면도구', '체크인 캐리어', '위탁 수하물에 배치'],
+    ['향수 / 왁스', '세면도구', '기내용 캐리어', '선택 항목'],
+    ['손톱깎이 / 면봉', '세면도구', '기내용 캐리어', '기내 반입 규정에 맞는 품목만 휴대'],
   ] as const;
   for (const [label, category, bagName, reason] of template) {
     if (existing.has(label)) continue;

@@ -185,7 +185,37 @@ app.get('/api/weather', async (req, res) => {
 app.post('/api/trips/:id/ai/ideas', async (req, res) => {
   const trip: any = getTrip(req.params.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
-  const result = await generateTripIdeas({ destination: trip.destination, dates: `${trip.start_date}~${trip.end_date}`, prompt: String(req.body.prompt || ''), weather: req.body.weather, existing: trip.places.map((p: any) => p.name) });
+  const restaurants = new Map((trip.restaurants || []).map((restaurant: any) => [restaurant.id, restaurant]));
+  const bags = new Map((trip.packing_bags || []).map((bag: any) => [bag.id, bag]));
+  const interactionMode = req.body.mode === 'trip' ? 'trip' : 'plan';
+  const japanNow = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short', hour12: false }).format(new Date());
+  const context = {
+    interaction_mode: interactionMode,
+    japan_now: japanNow,
+    trip: { title: trip.title, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date },
+    travelers: (trip.participants || []).map((person: any) => person.name),
+    rules: (trip.guides || []).filter((guide: any) => guide.section === 'rules').map((guide: any) => ({ title: guide.title, details: guide.details })),
+    itinerary: (trip.events || []).map((event: any) => ({ date: event.date, start: event.start_time, end: event.end_time, title: event.title, kind: event.kind, location: event.location, notes: event.notes, source: event.source, meta: event.meta })),
+    meals: (trip.meal_slots || []).map((slot: any) => ({
+      date: slot.date, time: slot.time, label: slot.label, area: slot.area, is_scheduled: Boolean(slot.event_id),
+      selected: slot.selected_restaurant_id ? (restaurants.get(slot.selected_restaurant_id) as any)?.name : null,
+      options: (slot.option_ids || []).map((id: string) => restaurants.get(id)).filter(Boolean).map((restaurant: any) => ({ name: restaurant.name, city: restaurant.city, hours: restaurant.hours, budget: restaurant.price_range, reservation: restaurant.reservation_status, notes: restaurant.notes, dietary: restaurant.dietary_notes })),
+    })),
+    candidates: (trip.places || []).map((place: any) => ({ name: place.name, category: place.category, votes: place.vote_score, notes: place.notes, region: place.research?.region, suggested_dates: place.research?.suggested_dates, best_time: place.research?.best_time, research_note: place.research?.note })),
+    checklist: (trip.checklist || []).map((item: any) => ({ title: item.title, category: item.category, status: item.status, notes: item.notes })),
+    packing: {
+      bags: (trip.packing_bags || []).map((bag: any) => ({ name: bag.name, items: (trip.packing || []).filter((item: any) => item.bag_id === bag.id).length, limit_kg: bag.weight_limit })),
+      unchecked: (trip.packing || []).filter((item: any) => !item.checked).map((item: any) => ({ label: item.label, bag: (bags.get(item.bag_id) as any)?.name || '미배정', reason: item.reason })),
+    },
+    decisions: (trip.options || []).map((option: any) => ({ group: option.group_title, name: option.name, price: option.price, fit: option.fit, verdict: option.verdict, recommended: Boolean(option.recommended) })),
+    day_decisions: (trip.decision_slots || []).map((slot: any) => ({
+      date: slot.date, time: slot.time, region: slot.region, type: slot.section_type, title: slot.title,
+      selected: (slot.options || []).find((option: any) => option.id === slot.selected_option_id)?.label || null,
+      options: (slot.options || []).map((option: any) => ({ label: option.label, price: option.price, duration: option.duration, route: option.route, recommended: Boolean(option.recommended) })),
+    })),
+  };
+  const history = Array.isArray(req.body.history) ? req.body.history.slice(-8).map((item: any) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: String(item.content || '').slice(0, 1500) })) : [];
+  const result = await generateTripIdeas({ destination: trip.destination, dates: `${trip.start_date}~${trip.end_date}`, prompt: String(req.body.prompt || ''), weather: req.body.weather, existing: trip.places.map((p: any) => p.name), context, history });
   res.json(result);
 });
 
@@ -200,7 +230,7 @@ app.post('/api/trips/:id/packing/generate', (req, res) => {
   const existing = new Set((db.prepare('SELECT label FROM packing_items WHERE trip_id = ?').all(req.params.id) as any[]).map((x) => x.label));
   for (const item of suggestions) {
     if (existing.has(item.label)) continue;
-    const bagName = item.category === '여행' ? '여권지갑' : item.category === '생활' ? '데일리 보조가방' : item.category === '코디' || item.category === '의류' || item.category === '신발' ? '체크인 캐리어' : '기내용 백팩';
+    const bagName = item.category === '여행' ? '여권지갑' : item.category === '생활' ? '데일리 보조가방' : item.category === '코디' || item.category === '의류' || item.category === '신발' ? '기내용 캐리어' : '기내용 백팩';
     stmt.run(id(), req.params.id, item.label, item.category, req.body.owner || 'Oosu', bagByName.get(bagName) || null, 'weather-ai', item.reason);
   }
   emitTrip(req.params.id);
@@ -215,6 +245,7 @@ app.patch('/api/packing/:id', (req, res) => {
   if (!updates.length) return res.json({ ok: true });
   const normalized = updates.map(([key, value]) => [key, key === 'checked' ? (value ? 1 : 0) : value] as const);
   db.prepare(`UPDATE packing_items SET ${normalized.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ?`).run(...normalized.map(([, value]) => value), req.params.id);
+  syncPackingChecklist(item.trip_id);
   emitTrip(item.trip_id);
   res.json({ ok: true });
 });
@@ -263,14 +294,20 @@ app.patch('/api/checklist/:id', (req, res) => {
   const item = db.prepare('SELECT trip_id FROM trip_checklist_items WHERE id = ?').get(req.params.id) as any;
   if (!item) return res.status(404).json({ error: 'Checklist item not found' });
   if (req.params.id === 'plan-task-restaurants') {
-    const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(item.trip_id) as any;
-    const derived = Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO';
-    db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(derived, req.params.id);
+    const derived = deriveRestaurantChecklist(item.trip_id);
     emitTrip(item.trip_id);
     return res.json({ ok: true, status: derived, derived: true });
   }
   const status = req.body.status === 'DONE' ? 'DONE' : 'TODO';
-  db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  const linkedPacking = db.prepare('SELECT packing_id FROM checklist_packing_links WHERE checklist_id = ?').all(req.params.id) as any[];
+  const transaction = db.transaction(() => {
+    db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+    if (linkedPacking.length) {
+      const stmt = db.prepare('UPDATE packing_items SET checked = ? WHERE id = ?');
+      for (const link of linkedPacking) stmt.run(status === 'DONE' ? 1 : 0, link.packing_id);
+    }
+  });
+  transaction();
   emitTrip(item.trip_id);
   res.json({ ok: true });
 });
@@ -283,12 +320,91 @@ app.patch('/api/restaurants/:id', (req, res) => {
     ? 'WALK-IN'
     : requested === 'BOOKED' ? 'BOOKED' : 'TODO';
   db.prepare('UPDATE restaurants SET reservation_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
-  const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(restaurant.trip_id) as any;
-  db.prepare(`UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'plan-task-restaurants' AND trip_id = ?`)
-    .run(Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO', restaurant.trip_id);
+  deriveRestaurantChecklist(restaurant.trip_id);
   emitTrip(restaurant.trip_id);
   res.json({ ok: true });
 });
+
+app.patch('/api/meal-slots/:id/select', (req, res) => {
+  const slot = db.prepare('SELECT * FROM meal_slots WHERE id = ?').get(req.params.id) as any;
+  if (!slot) return res.status(404).json({ error: 'Meal slot not found' });
+  const restaurantId = String(req.body.restaurant_id || '');
+  const valid = db.prepare('SELECT 1 FROM meal_slot_options WHERE meal_slot_id = ? AND restaurant_id = ?').get(req.params.id, restaurantId);
+  if (!valid) return res.status(400).json({ error: 'Restaurant is not an option for this meal slot' });
+  const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurantId) as any;
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const linked = db.prepare(`
+    SELECT rl.*, p.address, p.lat, p.lng FROM restaurant_links rl
+    JOIN places p ON p.id = rl.place_id WHERE rl.restaurant_id = ?
+  `).get(restaurantId) as any;
+  const transaction = db.transaction(() => {
+    db.prepare('UPDATE meal_slots SET selected_restaurant_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(restaurantId, req.params.id);
+    if (slot.event_id) {
+      db.prepare(`UPDATE events SET title = ?, location = ?, address = ?, lat = ?, lng = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(restaurant.name, restaurant.name, linked?.address || null, linked?.lat ?? null, linked?.lng ?? null,
+          [restaurant.notes, restaurant.dietary_notes].filter(Boolean).join(' · '), slot.event_id);
+    }
+    deriveRestaurantChecklist(slot.trip_id);
+  });
+  transaction();
+  emitTrip(slot.trip_id);
+  res.json({ ok: true, selected_restaurant_id: restaurantId });
+});
+
+app.patch('/api/decision-slots/:id/select', (req, res) => {
+  const slot = db.prepare('SELECT * FROM decision_slots WHERE id = ?').get(req.params.id) as any;
+  if (!slot) return res.status(404).json({ error: 'Decision slot not found' });
+  const optionId = String(req.body.option_id || '');
+  const option = db.prepare('SELECT * FROM decision_options WHERE id = ? AND decision_slot_id = ?').get(optionId, req.params.id) as any;
+  if (!option) return res.status(400).json({ error: 'Option is not valid for this decision slot' });
+  const transaction = db.transaction(() => {
+    db.prepare('UPDATE decision_slots SET selected_option_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(optionId, req.params.id);
+    if (slot.event_id && option.event_title) {
+      db.prepare(`UPDATE events SET
+        title = ?, kind = COALESCE(?, kind), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time),
+        location = COALESCE(?, location), notes = COALESCE(?, notes), meta_json = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`)
+        .run(option.event_title, option.event_kind || null, option.event_start_time || null, option.event_end_time || null,
+          option.event_location || null, option.event_notes || null, option.event_meta_json || '{}', slot.event_id);
+    }
+  });
+  transaction();
+  emitTrip(slot.trip_id);
+  res.json({ ok: true, selected_option_id: optionId });
+});
+
+function deriveRestaurantChecklist(tripId: string) {
+  const pending = db.prepare(`
+    SELECT COUNT(*) AS n FROM meal_slots ms
+    LEFT JOIN restaurants r ON r.id = ms.selected_restaurant_id
+    WHERE ms.trip_id = ? AND ms.event_id IS NOT NULL AND (
+      ms.selected_restaurant_id IS NULL OR
+      (r.reservation_action = 'RESERVE NOW' AND r.reservation_status != 'BOOKED')
+    )
+  `).get(tripId) as any;
+  const status = Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO';
+  db.prepare(`UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'plan-task-restaurants' AND trip_id = ?`)
+    .run(status, tripId);
+  return status;
+}
+
+function syncPackingChecklist(tripId: string) {
+  const checklistIds = db.prepare(`
+    SELECT DISTINCT cpl.checklist_id FROM checklist_packing_links cpl
+    JOIN trip_checklist_items c ON c.id = cpl.checklist_id WHERE c.trip_id = ?
+  `).all(tripId) as any[];
+  const countStmt = db.prepare(`
+    SELECT COUNT(*) AS total, SUM(CASE WHEN p.checked = 1 THEN 1 ELSE 0 END) AS checked
+    FROM checklist_packing_links cpl JOIN packing_items p ON p.id = cpl.packing_id
+    WHERE cpl.checklist_id = ?
+  `);
+  const updateStmt = db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+  for (const row of checklistIds) {
+    const counts = countStmt.get(row.checklist_id) as any;
+    const done = Number(counts?.total || 0) > 0 && Number(counts?.total || 0) === Number(counts?.checked || 0);
+    updateStmt.run(done ? 'DONE' : 'TODO', row.checklist_id);
+  }
+}
 
 async function geocodeOne(q: string) {
   try {

@@ -66,10 +66,16 @@ Canonical status: **this file is the human-readable source of truth for the trav
 
 | Time | Plan | Transport / notes |
 |---|---|---|
+| 05:45–05:52 | **Home → Hongik Univ. AREX** | Walk from 10 Wausan-ro 38-gil (Donggyo-dong 188-6); about 7 min normally. This deliberately targets the 05:57 train, so rain/luggage leaves little platform buffer |
+| 05:57–06:52 | **AREX · Hongik Univ. → ICN T1** | All-stop train. User-selected departure; online check-in is assumed complete |
+| 06:52–07:35 | **ICN T1 security / departure immigration / gate** | No currency exchange or airline-counter errand planned. Go directly to security; the trade-off is a tighter airport buffer |
 | 08:00–10:05 | T’way ICN → KIX | Confirmed booking |
-| ~10:05–11:15 | Immigration + baggage | Do not rush; train time is flexible |
-| ~11:15–13:00 | **HARUKA KIX → Kyoto Station** | JR HARUKA; official one-way adult baseline ¥2,200 |
-| ~13:05–14:00 | Kyoto Station → AMANEK / leave bags | Kyoto Subway Karasuma Line **Kyoto → Gojo**, then walk; no taxi |
+| 10:05–10:55 | **KIX T1 immigration / arrival** | Visit Japan Web QR ready; allow 30–60 min variation. Collect checked baggage here only if applicable |
+| 10:55–11:10 | **KIX T1 → Kansai-airport Station** | Walk via the Terminal 1 2F / AEROPLAZA direct connection |
+| ~11:15–12:30 | **HARUKA KIX → Kyoto Station** | About 75 min. 11:15 is a target; take the next train if immigration runs long. Official one-way adult baseline ¥2,200 |
+| 12:35–13:00 | **Kyoto Station → Kawaramachi Gojo** | Default: Kyoto City Bus **4 / 5 / 80 / 205**, whichever is convenient; hotel official access says about 10 min onboard. Allow extra wait/traffic time. Standard flat-zone bus fare ¥230 |
+| 13:00–13:03 | **Kawaramachi Gojo → AMANEK** | Hotel official access says about 1 min walk |
+| 13:05–13:25 | AMANEK bag drop / ask about early check-in | Confirmed check-in remains at 15:00 |
 | 15:00 | Check-in / short rest | Confirmed hotel |
 | 16:30–17:30 | **Kura Sushi Kyoto Teramachi** | **RESERVE NOW**; official web/app |
 | 17:30–19:30 | Teramachi / Shinkyogoku / Nishiki area | Slow covered-arcade walk; no Kiyomizu/Fushimi today |
@@ -123,8 +129,12 @@ Canonical status: **this file is the human-readable source of truth for the trav
 | 08:30–09:40 | **Fushimi Inari — lower shrine only, CONDITIONAL** | Keihan Kiyomizu-Gojo ↔ Fushimi-Inari; lower shrine + beginning of Senbon Torii only; **no mountain climb** |
 | ~10:15 | Return hotel | Pack / rest |
 | 11:00 | AMANEK checkout | Confirmed booking |
-| ~11:15–12:45 | **Kyoto → Osaka** | Keihan from Kiyomizu-Gojo toward Kitahama (transfer if required by train type) → Osaka Metro Sakaisuji Line to Ebisucho; no Shinkansen |
-| ~13:00 | Nipponbashi Crystal Hotel | Leave bags / check room availability |
+| 09:40–10:15 | **Fushimi-Inari → AMANEK** | Keihan back to Kiyomizu-Gojo, then walk to hotel. Delete with Fushimi in heavy rain |
+| 11:05–11:15 | **AMANEK → Kiyomizu-Gojo Station** | Walk with luggage after checkout |
+| 11:20–12:10 | **Keihan Kiyomizu-Gojo → Kitahama** | Ordinary/express rail; transfer if required by train type; no Shinkansen |
+| 12:10–12:25 | **Osaka Metro Kitahama → Ebisucho** | Sakaisuji Line |
+| 12:25–12:35 | **Ebisucho → Nipponbashi Crystal Hotel** | Short walk with luggage |
+| 12:35–13:00 | Nipponbashi Crystal Hotel | Leave bags / check room availability |
 | 14:00–14:45 | **Genrokuzushi Dotonbori** | **WALK-IN ONLY**; first Osaka sushi |
 | 14:45–15:50 | Dotonbori / Namba in daylight | Food/shopping base, not a one-time photo stop |
 | 16:00–16:30 | **Rikuro’s Namba Main Store** | **WALK-IN ONLY**; cafe L.O. 16:30, otherwise takeout |
@@ -174,12 +184,17 @@ Canonical status: **this file is the human-readable source of truth for the trav
 | Time | Plan | Transport / notes |
 |---|---|---|
 | 06:30–06:45 | Wake | Final packing |
-| 07:15 | Leave hotel | No taxi |
-| 07:15–08:50 | **Ebisucho → Tengachaya → KIX** | Osaka Metro Sakaisuji Line → **Nankai Airport Express**; Rapi:t only if disruption/timing risk makes it necessary |
-| 08:45–09:00 target | Arrive KIX T1 | Maintain airport buffer |
+| 07:05–07:15 | **Nipponbashi Crystal Hotel → Ebisucho** | Walk with luggage |
+| 07:15–07:25 | **Osaka Metro Ebisucho → Tengachaya** | Sakaisuji Line |
+| 07:30–08:15 | **Nankai Airport Express Tengachaya → KIX** | Rapi:t only if disruption/timing risk makes it necessary |
+| 08:15–08:25 | **Kansai-airport Station → KIX T1** | Direct indoor connection |
+| 08:25–08:40 | KIX T1 departure floor / boarding-pass check | Assumes online check-in is already complete and there is no counter errand |
 | 09:00–09:30 | **Osaka Tenma Sushi Nishiya** | **WALK-IN ONLY**, KIX T1 2F **before security** |
-| 09:30 onward | Security / immigration | Do not linger after sushi |
+| 09:30–10:40 | Security / immigration / gate | Do not linger after sushi |
 | 11:35–13:30 | T’way KIX → ICN | Confirmed booking |
+| 13:30–14:15 | ICN T1 immigration / arrival | Collect checked baggage only if applicable |
+| 14:15–15:05 | **AREX ICN T1 → Hongik Univ.** | All-stop train, about 50 min |
+| 15:05–15:15 | **Hongik Univ. → home** | Walk about 7–10 min |
 
 ---
 
@@ -198,6 +213,7 @@ Official store/booking systems take precedence over aggregators when they confli
 | **Yamamoto no Hamburg Shinsaibashi** | 9/16 11:30 | 11:00–22:00; food L.O. 21:30 | ~¥2,000–¥3,000/person | **WALK-IN ONLY** | Walk-in; reservations unavailable |
 | **Daiki Suisan Kaitenzushi Dotonbori** | 9/16 15:00 | 11:00–23:00 | ~¥2,000–¥4,000/person | **WALK-IN ONLY** | No seat reservations; at congestion some stores support app/LINE queue reception |
 | **Osaka Ohsho Nipponbashi** | 9/16 19:00 | **Official: Sun–Thu 11:00–24:00 (L.O. 23:30); Fri/Sat 11:00–25:00 (L.O. 24:00); no regular holiday** | ~¥1,000–¥2,000/person | **WALK-IN ONLY** | Walk-in |
+| **Gyoza no Ohsho Nihombashi-Denden-Town** | 9/16 dinner option | Mon–Sat 11:00–25:00 (L.O. 24:45); Sun/holidays 11:00–24:15 (L.O. 24:00) | ~¥1,000–¥2,000/person | **WALK-IN ONLY** | Walk-in; second gyoza option in the hotel/Nipponbashi area |
 | **Osaka Tenma Sushi Nishiya — KIX** | 9/17 09:00 | 07:00–22:00 | ~¥1,000–¥3,000/person | **WALK-IN ONLY** | Walk-in; KIX T1 2F before security |
 
 ### Important corrections from older listings
@@ -207,10 +223,49 @@ Official store/booking systems take precedence over aggregators when they confli
 
 ### Reservation state at plan creation
 
-- Kura Sushi Kyoto Teramachi — **TODO → BOOKED after reservation**
-- Sushiro Kyoto Gion — **TODO → BOOKED after reservation**
-- CHIBO Dotonbori — **TODO → BOOKED after reservation**
-- All other restaurants above — **WALK-IN**
+- Restaurant planning is now **meal-slot based**, not a single permanently fixed restaurant per meal.
+- Key lunch/dinner slots expose **2–3 candidates** in MyTrip; choosing one updates the linked schedule event.
+- The reservation checklist only requires **BOOKED** for the restaurant currently selected in a meal slot when that restaurant is marked `RESERVE NOW`.
+- Restaurant candidates are shared with **Candidates · Voting**, including vote count, Google Maps, menu/photo link and available official thumbnail.
+- Current defaults remain Kura Kyoto Teramachi, Sushiro Kyoto Gion, Ramen YUCHO, Genrokuzushi, CHIBO, Yamamoto no Hamburg, Daiki Suisan, Osaka Ohsho and KIX Nishiya until changed in the site.
+
+Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sanjo Honten**, **Ramen Sen no Kaze Kyoto**, **Kura Sushi Dotonbori Global Flagship**, **Ajinoya Honten**, **Fukuyoshi Osaka Shinsaibashi** and **Gyoza no Ohsho Nihombashi-Denden-Town**. A candidate changing in the site is a user decision; the canonical route/time block remains unless the linked meal slot is changed.
+
+### MyTrip decision-board behavior
+
+- The site separates each date into real decision points instead of one undifferentiated candidate list: transport, meal, after-meal activity, recovery and after-dinner choices.
+- On 9/13 this explicitly includes **KIX → Kyoto**, **Kyoto Station → AMANEK**, the first meal, the activity after that meal, the later meal/flex slot and the evening-after choice.
+- Selecting an option does **not** delete the alternatives. The chosen option is emphasized and the others remain visible as **PLAN B** so they can be compared or re-selected later if weather, queues or fatigue change.
+- The schedule itself shows the currently selected route; auxiliary cards that only belong to another route may be hidden there to keep the actual timeline coherent. Their full Plan B details remain in the decision board.
+- The Day Plan keeps all five days in chronological order but uses a wide horizontal card layout. Before/after the trip it opens on **Day 1**; during the trip it opens directly on the current Japan-date day so Day 4 does not require scrolling through Days 1–3.
+- Schedule times are displayed and edited in **24-hour HH:mm** format.
+- On mobile, the six-tab strip is intentionally removed. A compact **hamburger → left drawer** owns global navigation, while the Schedule screen uses a sticky **Day 1–5 date switcher** and renders only the selected day. This avoids horizontal day scrolling on a phone.
+- The floating assistant opens as a **full-screen mobile sheet** (100dvh) so long itinerary-aware answers have enough reading space; desktop keeps the smaller floating panel.
+- Itinerary cards always have a visual area. Restaurant/attraction/hotel/rail imagery uses official or official-source-page images where stable; otherwise the visual becomes an explicit Google Maps-linked route/place placeholder rather than an empty/broken image. Google Maps photos are not hotlinked without a configured Places API key.
+- The application has two explicit experiences over the same source-of-truth data: **PLAN** for pre-trip research, comparisons, reservations, packing, voting and itinerary editing; **TRIP** for the Japan-local current day, immediate next actions, Maps, selected meals, Plan B changes and on-the-road AI help. Before the trip PLAN is the default; during 9/13–9/17 TRIP is the default, with manual switching always available.
+- TRIP mode includes a mobile-readable **Useful Japanese** section grouped into restaurant, transport, hotel and help phrases. Every phrase shows Japanese text, Korean phonetic reading and Korean meaning; tapping a phrase copies the Japanese text for showing to staff.
+
+### Expanded research pool — 2026-09-10
+
+MyTrip now keeps a larger **research pool separate from the confirmed itinerary**. A researched candidate can be dated, voted and compared without silently becoming a scheduled stop. The candidate screen should be read as **date → Kyoto/Osaka → schedule order or theme**, while the canonical itinerary remains the route/time source of truth until Oosu explicitly selects/adds an option.
+
+- **9/13 Kyoto arrival:** after the first sushi slot, optional 19:00 choices include **Katsukura Shijo Teramachi** (tonkatsu, 11:00–21:00), **MACCHA HOUSE Kyoto Kawaramachi** (matcha dessert, 11:00–20:30) and **Ramen Sen no Kaze**. Nearby non-food research includes **Shosei-en** and **Higashi Hongan-ji** between Kyoto Station/Gojo, plus **Pontocho** as a short evening walk. These are options, not obligations; arrival-day rest remains higher priority.
+- **9/14 Kyoto:** keep Kiyomizu/Gion as the core. Add **Kennin-ji** as an easy Gion-adjacent temple, **Kyoto International Manga Museum** as a heavy-rain indoor substitute, and **Saryo Tsujiri Gion / MACCHA HOUSE** as dessert candidates rather than forcing one cafe into the schedule.
+- **9/15 Osaka:** Dotonbori lunch/dinner now has broader alternates including **Mizuno** for okonomiyaki and **Dotonbori Imai / Tsurutontan Soemoncho** for an optional noodle stop. Nearby **Kuromon Market, Hozenji Yokocho and Namba Parks Garden** are short candidates around the hotel/Namba cluster.
+- **9/16 Osaka:** preserve Osaka Castle + Shinsaibashi as the core. **Osaka Museum of Housing and Living** is a stronger indoor rain alternative; **Namba Yasaka, Kuromon, Hozenji and Namba Parks** remain short optional inserts rather than extra mandatory walking.
+
+Research sources used for the expanded pool include official/current pages where available:
+
+- Katsukura Shijo Teramachi: https://www.katsukura.jp/shops/sijoteramachi/
+- MACCHA HOUSE Kyoto Kawaramachi: https://maccha-house.com/1174/en/
+- Saryo Tsujiri Gion: https://www.giontsujiri.co.jp/store/saryotsujiri-honten/
+- Kyoto International Manga Museum: https://kyotomm.jp/en/opentime-cost/
+- Higashi Hongan-ji / Shosei-en: https://www.higashihonganji.or.jp/
+- Kennin-ji: https://www.kenninji.jp/access/
+- Kuromon Market / Namba Yasaka / Namba Parks / Hozenji / Osaka Museum of Housing and Living: https://osaka-info.jp/en/
+- Tsurutontan Soemoncho: https://www.tsurutontan.co.jp/shop/soemoncho/
+- Mizuno: https://www.mizuno-osaka.com/sp/global_5.html
+- Dotonbori Imai: https://www.d-imai.com/shops/honten/
 
 ### Restaurant source links
 
@@ -223,6 +278,7 @@ Official store/booking systems take precedence over aggregators when they confli
 - Yamamoto no Hamburg: https://tabelog.com/osaka/A2701/A270201/27154000/
 - Daiki Suisan official: https://www.daiki-suisan.co.jp/shop/kaitenzushi/doutonbori/
 - Osaka Ohsho official: https://www.osaka-ohsho.com/store/detail.php?area=osaka&id=nipponbashi
+- Gyoza no Ohsho Nihombashi-Denden-Town official: https://map.ohsho.co.jp/b/ohsho/info/4874/
 - KIX Nishiya official: https://www.kansai-airport.or.jp/en/dine/d091
 
 ---
@@ -319,6 +375,33 @@ Use **pay-as-you-go ICOCA / compatible IC transit payment** for local transport.
 - Physical ICOCA standard purchase is typically **¥2,000**, including **¥1,500 usable balance + ¥500 deposit**.
 - If a compatible iPhone/Apple Watch setup is already practical, mobile IC can reduce card handling.
 - Keep some yen cash because physical IC purchase/top-up situations can still require cash.
+- Kyoto City Bus flat-fare-area rides are currently **¥230/adult**. The **Subway & Bus 1-Day Pass is ¥1,100/adult**; the old bus-only 1-day pass has been discontinued.
+- For this itinerary the ¥1,100 day pass is not expected to pay off: 9/13 needs only the Kyoto Station→Kawaramachi Gojo bus, 9/14 uses only a small number of city-bus rides, and 9/15 relies mainly on **Keihan**, which is outside the Kyoto City Subway & Bus pass.
+- Ordinary automatic IC transfer discounts ended in 2023. Kyoto now has an ICOCA/PiTaPa points program, but it is not worth optimizing around for this short tourist itinerary.
+
+## Contactless bank-card tap: useful, but not a full ICOCA replacement
+
+- **Osaka Metro:** supported. Contactless Visa / Mastercard / JCB / American Express / Diners / Discover / UnionPay cards and compatible phone/watch wallets can be tapped at supported readers without prior registration.
+- **Nankai Railway:** supported at designated stations using dedicated touch-payment gates. Confirm the entry and exit stations are both supported before relying on it; this is useful for the Tengachaya↔KIX leg when the dedicated readers are available.
+- **Kyoto City Bus / Kyoto Subway:** **not supported yet as of 2026-09**. Kyoto is working toward credit-card contactless payment during FY2027; current official guidance still says bank/credit cards cannot be used directly for bus fare, and subway credit-card tap is unavailable.
+- **Keihan Railway:** **not supported** for ordinary fare payment by contactless credit card.
+- **JR-WEST / HARUKA:** use the HARUKA ticket/QR and ICOCA-compatible transport IC where applicable; do not assume a normal bank-card tap works at JR-West gates.
+
+**Decision for this trip:** a contactless bank card can reduce ICOCA usage in Osaka, but because Kyoto City Bus/Subway and Keihan are part of the actual itinerary, **ICOCA (or another nationwide-compatible transit IC) remains the simplest all-route local-payment fallback**. Do not buy a Kyoto/Kansai unlimited pass solely to avoid carrying ICOCA.
+
+## Pass options shown side-by-side in MyTrip
+
+The site now separates **Kyoto transport / Osaka transport / eSIM** into independent comparison tables with live purchase/info links instead of grouping them under one “connectivity” card.
+
+- **Kyoto Subway & Bus 1-Day Pass:** official adult price **¥1,100**.
+- **Klook Kyoto Subway & Bus 1-Day:** currently shown at **₩11,100/adult**; the voucher must be exchanged at the **Limon Welcome Desk in KIX Terminal 1**, so it is not simply a mobile ticket to buy after reaching Kyoto. Compare its final KRW price with official ¥1,100.
+- **Keihan Kyoto Sightseeing Pass:** **¥1,100 1-day / ¥1,300 24h**.
+- **Keihan Kyoto-Osaka Sightseeing Pass:** **¥1,650 1-day / ¥1,850 24h**.
+- **Osaka Enjoy Eco Card:** **¥820 weekday / ¥620 weekends & holidays**.
+- **Klook Osaka Metro + City Bus 1-Day QR:** currently **₩8,900/adult**.
+- **Osaka Amazing Pass:** **¥3,500/1-day**; not a value fit for the current low-attraction-count itinerary.
+
+For the current itinerary the site recommends **ICOCA/pay-as-you-go in Kyoto** and **card tap or ICOCA/pay-as-you-go in Osaka**, while still making each pass purchasable from the comparison table if the plan changes.
 
 ## Do not pre-buy a broad Kansai transport pass
 
@@ -340,8 +423,10 @@ JR-WEST IC guide: https://www.westjr.co.jp/travel-information/en/train-usage-gui
 
 1. KIX immigration/baggage.
 2. JR **HARUKA → Kyoto Station**.
-3. Kyoto Subway Karasuma Line **Kyoto → Gojo**.
-4. Walk to AMANEK.
+3. Default with luggage: Kyoto City Bus **4 / 5 / 80 / 205 → Kawaramachi Gojo**.
+4. Walk about **1 minute** to AMANEK.
+
+Hotel-official fallback if buses are badly delayed/crowded: Kyoto Subway Karasuma Line **Kyoto → Gojo** (1 stop), then about **10 minutes on foot**.
 
 No taxi. HARUKA keeps transfers low on the rainy luggage day.
 
@@ -449,6 +534,8 @@ JNTO: https://www.japan.travel/en/plan/travel-insurance-in-japan/
 - [ ] Blister plasters / small foot-care kit
 - [ ] Power bank + charging cables; power bank stays in carry-on
 - [ ] Small waterproof zip pouch for passport/electronics
+- [ ] **Sony mirrorless camera** + battery / memory card / charger check
+- [ ] **Neck pillow**
 - [ ] Normal personal medicine in appropriate packaging
 - [ ] Two eSIMs + offline QR/setup screenshots
 - [ ] Small amount of yen cash + card(s)
@@ -479,6 +566,7 @@ Japan electricity reference: https://www.japan.travel/en/plan/plug-and-electrici
 - [ ] Check/buy travel insurance
 - [ ] Buy Type-A plug adapters if missing
 - [ ] Prepare umbrella + waterproof outer layer
+- [ ] Buy **tattoo-cover leg gaiter / sleeve (발토시)** for AMANEK bath use if needed
 
 ## 9/12 night
 
