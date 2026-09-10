@@ -204,6 +204,11 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
       unchecked: (trip.packing || []).filter((item: any) => !item.checked).map((item: any) => ({ label: item.label, bag: (bags.get(item.bag_id) as any)?.name || '미배정', reason: item.reason })),
     },
     decisions: (trip.options || []).map((option: any) => ({ group: option.group_title, name: option.name, price: option.price, fit: option.fit, verdict: option.verdict, recommended: Boolean(option.recommended) })),
+    day_decisions: (trip.decision_slots || []).map((slot: any) => ({
+      date: slot.date, time: slot.time, region: slot.region, type: slot.section_type, title: slot.title,
+      selected: (slot.options || []).find((option: any) => option.id === slot.selected_option_id)?.label || null,
+      options: (slot.options || []).map((option: any) => ({ label: option.label, price: option.price, duration: option.duration, route: option.route, recommended: Boolean(option.recommended) })),
+    })),
   };
   const history = Array.isArray(req.body.history) ? req.body.history.slice(-8).map((item: any) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: String(item.content || '').slice(0, 1500) })) : [];
   const result = await generateTripIdeas({ destination: trip.destination, dates: `${trip.start_date}~${trip.end_date}`, prompt: String(req.body.prompt || ''), weather: req.body.weather, existing: trip.places.map((p: any) => p.name), context, history });
@@ -340,6 +345,28 @@ app.patch('/api/meal-slots/:id/select', (req, res) => {
   transaction();
   emitTrip(slot.trip_id);
   res.json({ ok: true, selected_restaurant_id: restaurantId });
+});
+
+app.patch('/api/decision-slots/:id/select', (req, res) => {
+  const slot = db.prepare('SELECT * FROM decision_slots WHERE id = ?').get(req.params.id) as any;
+  if (!slot) return res.status(404).json({ error: 'Decision slot not found' });
+  const optionId = String(req.body.option_id || '');
+  const option = db.prepare('SELECT * FROM decision_options WHERE id = ? AND decision_slot_id = ?').get(optionId, req.params.id) as any;
+  if (!option) return res.status(400).json({ error: 'Option is not valid for this decision slot' });
+  const transaction = db.transaction(() => {
+    db.prepare('UPDATE decision_slots SET selected_option_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(optionId, req.params.id);
+    if (slot.event_id && option.event_title) {
+      db.prepare(`UPDATE events SET
+        title = ?, kind = COALESCE(?, kind), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time),
+        location = COALESCE(?, location), notes = COALESCE(?, notes), meta_json = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`)
+        .run(option.event_title, option.event_kind || null, option.event_start_time || null, option.event_end_time || null,
+          option.event_location || null, option.event_notes || null, option.event_meta_json || '{}', slot.event_id);
+    }
+  });
+  transaction();
+  emitTrip(slot.trip_id);
+  res.json({ ok: true, selected_option_id: optionId });
 });
 
 function deriveRestaurantChecklist(tripId: string) {

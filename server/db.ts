@@ -237,6 +237,51 @@ CREATE TABLE IF NOT EXISTS place_research (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS decision_slots (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  time TEXT,
+  region TEXT NOT NULL,
+  section_type TEXT NOT NULL DEFAULT 'activity',
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+  selected_option_id TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_slots_trip ON decision_slots(trip_id, date, sort_order);
+
+CREATE TABLE IF NOT EXISTS decision_options (
+  id TEXT PRIMARY KEY,
+  decision_slot_id TEXT NOT NULL REFERENCES decision_slots(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  badge TEXT,
+  summary TEXT,
+  price TEXT,
+  duration TEXT,
+  route TEXT,
+  map_url TEXT,
+  source_url TEXT,
+  recommended INTEGER NOT NULL DEFAULT 0,
+  event_title TEXT,
+  event_kind TEXT,
+  event_start_time TEXT,
+  event_end_time TEXT,
+  event_location TEXT,
+  event_notes TEXT,
+  event_meta_json TEXT NOT NULL DEFAULT '{}',
+  hidden_event_ids_json TEXT NOT NULL DEFAULT '[]',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_decision_options_slot ON decision_options(decision_slot_id, sort_order);
 `);
 
 ensureColumn('packing_items', 'bag_id', 'TEXT');
@@ -264,7 +309,7 @@ export function getTrip(tripId: string) {
   const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId);
   if (!trip) return null;
   const participants = db.prepare('SELECT * FROM participants WHERE trip_id = ? ORDER BY created_at').all(tripId);
-  const events = db.prepare('SELECT * FROM events WHERE trip_id = ? ORDER BY date, COALESCE(start_time, \'99:99\'), sort_order, created_at').all(tripId)
+  const rawEvents = db.prepare('SELECT * FROM events WHERE trip_id = ? ORDER BY date, COALESCE(start_time, \'99:99\'), sort_order, created_at').all(tripId)
     .map((row: any) => ({ ...row, meta: safeJson(row.meta_json) }));
   const rawPlaces = db.prepare(`
     SELECT p.*, COALESCE(SUM(v.value), 0) AS vote_score, COUNT(v.id) AS vote_count
@@ -326,6 +371,25 @@ export function getTrip(tripId: string) {
     optionIdsBySlot.set(option.meal_slot_id, list);
   }
   const richMealSlots = mealSlots.map((slot) => ({ ...slot, option_ids: optionIdsBySlot.get(slot.id) || [] }));
+  const decisionSlots = db.prepare('SELECT * FROM decision_slots WHERE trip_id = ? ORDER BY date, sort_order, created_at').all(tripId) as any[];
+  const decisionOptions = db.prepare(`
+    SELECT dopt.* FROM decision_options dopt
+    JOIN decision_slots ds ON ds.id = dopt.decision_slot_id
+    WHERE ds.trip_id = ? ORDER BY ds.date, ds.sort_order, dopt.sort_order
+  `).all(tripId) as any[];
+  const decisionOptionsBySlot = new Map<string, any[]>();
+  for (const option of decisionOptions) {
+    const list = decisionOptionsBySlot.get(option.decision_slot_id) || [];
+    list.push({ ...option, hidden_event_ids: safeJson(option.hidden_event_ids_json), event_meta: safeJson(option.event_meta_json) });
+    decisionOptionsBySlot.set(option.decision_slot_id, list);
+  }
+  const richDecisionSlots = decisionSlots.map((slot) => ({ ...slot, options: decisionOptionsBySlot.get(slot.id) || [] }));
+  const hiddenEventIds = new Set<string>();
+  for (const slot of richDecisionSlots) {
+    const selected = slot.options.find((option: any) => option.id === slot.selected_option_id);
+    for (const eventId of selected?.hidden_event_ids || []) hiddenEventIds.add(eventId);
+  }
+  const events = rawEvents.filter((event: any) => !hiddenEventIds.has(event.id));
   const placeResearchRows = db.prepare('SELECT * FROM place_research WHERE place_id IN (SELECT id FROM places WHERE trip_id = ?)').all(tripId) as any[];
   const researchByPlace = new Map(placeResearchRows.map((row) => [row.place_id, row]));
   const places = (rawPlaces as any[]).map((place) => {
@@ -344,7 +408,7 @@ export function getTrip(tripId: string) {
       } : null,
     };
   });
-  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots };
+  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots, decision_slots: richDecisionSlots };
 }
 
 function safeJson(value: string) {

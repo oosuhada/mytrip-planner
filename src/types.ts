@@ -149,6 +149,34 @@ export type MealSlot = {
   sort_order: number;
 };
 
+export type DecisionOption = {
+  id: string;
+  label: string;
+  badge?: string | null;
+  summary?: string | null;
+  price?: string | null;
+  duration?: string | null;
+  route?: string | null;
+  map_url?: string | null;
+  source_url?: string | null;
+  recommended: number;
+  sort_order: number;
+};
+
+export type DecisionSlot = {
+  id: string;
+  date: string;
+  time?: string | null;
+  region: string;
+  section_type: string;
+  title: string;
+  subtitle?: string | null;
+  event_id?: string | null;
+  selected_option_id?: string | null;
+  sort_order: number;
+  options: DecisionOption[];
+};
+
 export type Trip = TripSummary & {
   participants: Participant[];
   events: TripEvent[];
@@ -160,6 +188,7 @@ export type Trip = TripSummary & {
   guides: TripGuide[];
   options: TripOption[];
   meal_slots: MealSlot[];
+  decision_slots: DecisionSlot[];
 };
 
 export type WeatherDay = { date: string; code: number; max: number; min: number; rain: number };

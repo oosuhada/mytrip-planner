@@ -231,6 +231,15 @@ Official store/booking systems take precedence over aggregators when they confli
 
 Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sanjo Honten**, **Ramen Sen no Kaze Kyoto**, **Kura Sushi Dotonbori Global Flagship**, **Ajinoya Honten**, **Fukuyoshi Osaka Shinsaibashi** and **Gyoza no Ohsho Nihombashi-Denden-Town**. A candidate changing in the site is a user decision; the canonical route/time block remains unless the linked meal slot is changed.
 
+### MyTrip decision-board behavior
+
+- The site separates each date into real decision points instead of one undifferentiated candidate list: transport, meal, after-meal activity, recovery and after-dinner choices.
+- On 9/13 this explicitly includes **KIX → Kyoto**, **Kyoto Station → AMANEK**, the first meal, the activity after that meal, the later meal/flex slot and the evening-after choice.
+- Selecting an option does **not** delete the alternatives. The chosen option is emphasized and the others remain visible as **PLAN B** so they can be compared or re-selected later if weather, queues or fatigue change.
+- The schedule itself shows the currently selected route; auxiliary cards that only belong to another route may be hidden there to keep the actual timeline coherent. Their full Plan B details remain in the decision board.
+- The Day Plan keeps all five days in chronological order but uses a wide horizontal card layout. Before/after the trip it opens on **Day 1**; during the trip it opens directly on the current Japan-date day so Day 4 does not require scrolling through Days 1–3.
+- Schedule times are displayed and edited in **24-hour HH:mm** format.
+
 ### Expanded research pool — 2026-09-10
 
 MyTrip now keeps a larger **research pool separate from the confirmed itinerary**. A researched candidate can be dated, voted and compared without silently becoming a scheduled stop. The candidate screen should be read as **date → Kyoto/Osaka → schedule order or theme**, while the canonical itinerary remains the route/time source of truth until Oosu explicitly selects/adds an option.

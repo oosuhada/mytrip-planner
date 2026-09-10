@@ -126,6 +126,49 @@ CREATE TABLE IF NOT EXISTS place_research (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS decision_slots (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  time TEXT,
+  region TEXT NOT NULL,
+  section_type TEXT NOT NULL DEFAULT 'activity',
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+  selected_option_id TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_decision_slots_trip ON decision_slots(trip_id, date, sort_order);
+
+CREATE TABLE IF NOT EXISTS decision_options (
+  id TEXT PRIMARY KEY,
+  decision_slot_id TEXT NOT NULL REFERENCES decision_slots(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  badge TEXT,
+  summary TEXT,
+  price TEXT,
+  duration TEXT,
+  route TEXT,
+  map_url TEXT,
+  source_url TEXT,
+  recommended INTEGER NOT NULL DEFAULT 0,
+  event_title TEXT,
+  event_kind TEXT,
+  event_start_time TEXT,
+  event_end_time TEXT,
+  event_location TEXT,
+  event_notes TEXT,
+  event_meta_json TEXT NOT NULL DEFAULT '{}',
+  hidden_event_ids_json TEXT NOT NULL DEFAULT '[]',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_decision_options_slot ON decision_options(decision_slot_id, sort_order);
+
 -- Checkable pre-departure work. Re-running this script intentionally preserves status.
 INSERT INTO trip_checklist_items (id, trip_id, title, category, status, notes, url, sort_order)
 VALUES
@@ -267,6 +310,19 @@ ON CONFLICT(restaurant_id) DO UPDATE SET
   place_id=excluded.place_id, google_maps_url=excluded.google_maps_url,
   menu_url=excluded.menu_url, image_url=COALESCE(excluded.image_url, restaurant_links.image_url),
   source_url=excluded.source_url, updated_at=CURRENT_TIMESTAMP;
+
+-- Prefer stable official OGP/menu imagery where it is directly available.
+-- Cards still render a designed placeholder when a source blocks hotlinking.
+UPDATE restaurant_links SET image_url='https://www.giontsujiri.co.jp/assets/img/common/ogimg.jpg'
+WHERE restaurant_id='plan-rest-saryo-tsujiri-gion' AND (image_url IS NULL OR image_url='');
+UPDATE restaurant_links SET image_url='https://www.tsurutontan.co.jp/content/uploads/2020/03/og-1.jpg'
+WHERE restaurant_id='plan-rest-tsurutontan-soemoncho' AND (image_url IS NULL OR image_url='');
+UPDATE restaurant_links SET image_url='https://www.akindo-sushiro.co.jp/shared/images/ogp.png?260319'
+WHERE restaurant_id='plan-rest-sushiro-gion' AND (image_url IS NULL OR image_url='');
+UPDATE restaurant_links SET image_url='https://www.rikuro.co.jp/img/ogpimage.jpg'
+WHERE restaurant_id='plan-rest-rikuro-namba' AND (image_url IS NULL OR image_url='');
+UPDATE restaurant_links SET image_url='https://www.ohsho.co.jp/common/img/og_image.png'
+WHERE restaurant_id='plan-rest-gyoza-ohsho-denden' AND (image_url IS NULL OR image_url='');
 
 -- Region/date research metadata drives Candidate Voting labels without forcing
 -- researched alternatives into the actual schedule.
@@ -463,6 +519,114 @@ VALUES
 ('meal-0916-dinner-gyoza', 'plan-rest-tsurutontan-soemoncho', 30),
 ('meal-0917-airport-sushi', 'plan-rest-kix-nishiya', 10)
 ON CONFLICT(meal_slot_id, restaurant_id) DO UPDATE SET sort_order=excluded.sort_order;
+
+-- Date-level decision sections. These are the planning units shown above the
+-- raw candidate pool: transport, what-to-do-next and recovery choices are
+-- separated from meal slots so a day reads as a sequence of decisions.
+INSERT INTO decision_slots (id, trip_id, date, time, region, section_type, title, subtitle, event_id, selected_option_id, sort_order)
+VALUES
+('decision-0913-kix-kyoto', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-13', '11:10', 'Kyoto', 'transport', 'KIX → Kyoto 이동', '입국 후 교토역까지 어떤 교통수단을 탈지 선택', 'plan-event-0913-haruka', 'decision-opt-0913-haruka', 10),
+('decision-0913-kyoto-hotel', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-13', '12:35', 'Kyoto', 'transport', 'Kyoto Station → AMANEK', '캐리어를 들고 호텔까지 가는 방법 비교', 'plan-event-0913-hotel-transfer', 'decision-opt-0913-citybus', 20),
+('decision-0913-after-first-meal', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-13', '17:30', 'Kyoto', 'activity', '첫 식사 후', '도착 피로와 비 상태에 따라 저녁 전 시간을 선택', 'plan-event-0913-arcades', 'decision-opt-0913-arcades', 40),
+('decision-0913-after-dinner', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-13', '20:30', 'Kyoto', 'activity', '저녁 후', '첫날 밤은 회복을 우선하고 짧게 선택', 'plan-event-0913-bath', 'decision-opt-0913-bath', 60),
+
+('decision-0914-morning', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-14', '08:30', 'Kyoto', 'activity', '오전 핵심 일정', '비가 약하면 Higashiyama, 강하면 실내 대안', 'plan-event-0914-kiyomizu', 'decision-opt-0914-kiyomizu', 10),
+('decision-0914-afternoon', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-14', '12:00', 'Kyoto', 'activity', '점심 후', 'Gion/Kawaramachi 산책과 실내 대안 비교', 'plan-event-0914-gion-kawaramachi', 'decision-opt-0914-gion', 30),
+('decision-0914-recovery', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-14', '15:00', 'Kyoto', 'recovery', '저녁 전 회복', '호텔 휴식과 대욕장 시간을 고정점으로 사용', NULL, 'decision-opt-0914-hotel-rest', 40),
+
+('decision-0915-morning', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '08:30', 'Kyoto', 'activity', '체크아웃 전 오전', '날씨에 따라 Fushimi Inari를 할지 과감히 뺄지 선택', 'plan-event-0915-fushimi', 'decision-opt-0915-fushimi', 10),
+('decision-0915-kyoto-osaka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '11:20', 'Osaka', 'transport', 'Kyoto → Osaka 호텔 이동', '숙소 위치를 기준으로 환승 횟수와 캐리어 이동을 비교', 'plan-event-0915-keihan-osaka', 'decision-opt-0915-keihan', 20),
+('decision-0915-after-lunch', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '14:45', 'Osaka', 'activity', '오사카 첫 식사 후', 'Dotonbori/Namba에서 너무 많이 걷지 않는 선택지', 'plan-event-0915-dotonbori-day', 'decision-opt-0915-dotonbori', 45),
+('decision-0915-after-dinner', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '20:00', 'Osaka', 'activity', '저녁 후', '도톤보리 야경을 볼지 바로 쉴지 선택', 'plan-event-0915-dotonbori-night', 'decision-opt-0915-night', 80),
+
+('decision-0916-morning', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-16', '09:00', 'Osaka', 'activity', '오전', 'Osaka Castle을 기본으로 비가 강하면 실내 대안', 'plan-event-0916-castle', 'decision-opt-0916-castle', 10),
+('decision-0916-after-lunch', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-16', '13:00', 'Osaka', 'activity', '점심 후', 'Shinsaibashi 남하 또는 짧은 실내/녹지 후보', 'plan-event-0916-shinsaibashi', 'decision-opt-0916-shinsaibashi', 40),
+('decision-0916-after-dinner', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-16', '20:00', 'Osaka', 'activity', '마지막 저녁 후', '체력이 남을 때만 마지막 야경', 'plan-event-0916-dotonbori-final', 'decision-opt-0916-final-night', 80),
+
+('decision-0917-kix', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-17', '07:30', 'Osaka', 'transport', 'Nipponbashi → KIX', 'Tengachaya에서 공항까지 비용과 좌석 편의 비교', 'plan-event-0917-nankai-kix', 'decision-opt-0917-airport-express', 10)
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, date=excluded.date, time=excluded.time, region=excluded.region,
+  section_type=excluded.section_type, title=excluded.title, subtitle=excluded.subtitle,
+  event_id=excluded.event_id, selected_option_id=COALESCE(decision_slots.selected_option_id, excluded.selected_option_id),
+  sort_order=excluded.sort_order, updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO decision_options (
+  id, decision_slot_id, label, badge, summary, price, duration, route, map_url, source_url, recommended,
+  event_title, event_kind, event_start_time, event_end_time, event_location, event_notes, event_meta_json, hidden_event_ids_json, sort_order
+) VALUES
+('decision-opt-0913-haruka', 'decision-0913-kix-kyoto', 'JR HARUKA', '기본 추천', '교통체증 없이 교토역까지 직통. 현재 일정의 기본안.', '¥2,200', '약 75분', 'Kansai-airport Station → Kyoto Station', 'https://www.google.com/maps/dir/?api=1&origin=Kansai-airport%20Station&destination=Kyoto%20Station&travelmode=transit', 'https://www.westjr.co.jp/travel-information/en/tickets-passes/oneway/haruka/', 1, 'HARUKA · KIX → Kyoto', 'train', '11:15', '12:30', 'Kansai-airport Station → Kyoto Station', 'JR HARUKA 약 75분. 입국 완료 시각에 맞춰 다음 열차로 유동 변경. JR-WEST 공식 ¥2,200.', '{"transport":"JR HARUKA","rain":"공항→역→교토까지 철도 중심"}', '[]', 10),
+('decision-opt-0913-limousine', 'decision-0913-kix-kyoto', 'Airport Limousine Bus', '환승 최소', 'KIX T1에서 바로 타므로 역까지 이동이 없다. 도로 정체 가능성은 있음.', '¥2,800', '약 1시간 25–30분', 'KIX Terminal 1 → Kyoto Station Hachijo Exit', 'https://www.google.com/maps/dir/?api=1&origin=Kansai%20International%20Airport%20Terminal%201&destination=Kyoto%20Station%20Hachijo%20Exit&travelmode=transit', 'https://www.kate.co.jp/en/timetable/detail/KY', 0, 'Airport Limousine Bus · KIX T1 → Kyoto', 'train', '11:10', '12:38', 'Kansai International Airport Terminal 1 → Kyoto Station Hachijo Exit', '공식 시간표 기준 T1 11:10 → Kyoto 12:38 예시. 놓치면 다음 편을 이용. 도로 정체 가능.', '{"transport":"KIX Limousine Bus","rain":"터미널에서 바로 승차","walking":"역 이동 없음"}', '["plan-event-0913-kix-station"]', 20),
+
+('decision-opt-0913-citybus', 'decision-0913-kyoto-hotel', 'Kyoto City Bus 4/5/80/205', '캐리어 추천', 'Kawaramachi Gojo에서 내려 호텔까지 약 1분. 대기·정체를 감안해 여유 있게 잡음.', '¥230', '약 20–25분', 'Kyoto Station → Kawaramachi Gojo → AMANEK', 'https://www.google.com/maps/dir/?api=1&origin=Kyoto%20Station&destination=HOTEL%20AMANEK%20Kyoto%20Kawaramachi%20Gojo&travelmode=transit', 'https://www.city.kyoto.lg.jp/kotsu/page/0000324695.html', 1, 'Kyoto Station → Kawaramachi Gojo', 'transfer', '12:35', '13:00', 'Kyoto Station → Kawaramachi Gojo', '시버스 4·5·80·205 중 먼저 오는 편. 균일구간 ¥230. 정류장에서 호텔까지 약 1분.', '{"transport":"Kyoto City Bus 4/5/80/205","walking":"정류장 이동만","rain":"캐리어 도보 최소"}', '[]', 10),
+('decision-opt-0913-subway', 'decision-0913-kyoto-hotel', 'Subway + walk', '정체 회피', 'Kyoto→Gojo 1정거장 후 호텔까지 약 10분 도보. 버스가 막힐 때 좋음.', '¥220', '약 15–20분', 'Kyoto Station → Gojo Station → AMANEK', 'https://www.google.com/maps/dir/?api=1&origin=Kyoto%20Station&destination=HOTEL%20AMANEK%20Kyoto%20Kawaramachi%20Gojo&travelmode=transit', 'https://www.city.kyoto.lg.jp/kotsu/page/0000240757.html', 0, 'Subway + walk · Kyoto Station → AMANEK', 'transfer', '12:35', '13:05', 'Kyoto Station → Gojo Station → HOTEL AMANEK Kyoto Kawaramachi Gojo', 'Karasuma Line 1구간 ¥220 후 약 10분 도보. 교통정체 회피용.', '{"transport":"Kyoto Subway Karasuma Line + walk","walking":"Gojo→호텔 약 10분","rain":"우산 필요"}', '["plan-event-0913-gojo-amanek-walk"]', 20),
+('decision-opt-0913-walk', 'decision-0913-kyoto-hotel', 'Kyoto Station에서 전부 걷기', '무료', '비용은 없지만 캐리어와 비를 고려하면 이번 여행에는 굳이 추천하지 않음.', '¥0', '약 25–35분', 'Kyoto Station → AMANEK', 'https://www.google.com/maps/dir/?api=1&origin=Kyoto%20Station&destination=HOTEL%20AMANEK%20Kyoto%20Kawaramachi%20Gojo&travelmode=walking', NULL, 0, 'Walk · Kyoto Station → AMANEK', 'transfer', '12:35', '13:10', 'Kyoto Station → HOTEL AMANEK Kyoto Kawaramachi Gojo', '캐리어를 들고 전 구간 도보. 비나 더위에는 비추천.', '{"transport":"walk","walking":"약 25–35분","rain":"비 오면 비추천"}', '["plan-event-0913-gojo-amanek-walk"]', 30),
+
+('decision-opt-0913-arcades', 'decision-0913-after-first-meal', 'Teramachi · Shinkyogoku · Nishiki', '기본 추천', '덮인 상점가 중심이라 첫날·우천 모두 안정적.', NULL, '약 1.5–2시간', '첫 식사 → covered arcade', 'https://www.google.com/maps/search/?api=1&query=Teramachi%20Shopping%20Arcade%20Kyoto', NULL, 1, 'Teramachi · Shinkyogoku · Nishiki 느긋하게', 'activity', '17:30', '19:30', 'Teramachi / Shinkyogoku / Nishiki area', '도착일에는 실내·반실내 산책을 우선.', '{"transport":"walk","walking":"약 2–3k","rain":"covered arcade 중심"}', '[]', 10),
+('decision-opt-0913-pontocho', 'decision-0913-after-first-meal', 'Pontocho 짧은 산책', '날씨 좋을 때', '가와라마치 쪽으로 짧게 보고 바로 호텔 방향으로 돌아오는 선택.', NULL, '약 45–60분', 'Teramachi → Pontocho → 호텔 방향', 'https://www.google.com/maps/search/?api=1&query=Pontocho%20Alley%20Kyoto', 'https://kyoto.travel/en/other_attractions/117.html', 0, 'Pontocho · short evening walk', 'activity', '17:45', '18:45', 'Pontocho Alley', '비가 약하고 체력이 남을 때만 짧게.', '{"transport":"walk","walking":"약 1–2k","rain":"비 강하면 제외"}', '[]', 20),
+('decision-opt-0913-rest', 'decision-0913-after-first-meal', '호텔 복귀 · 휴식', '피로 우선', '도착 피로가 크면 관광을 늘리지 않고 바로 쉬는 선택.', NULL, '1–2시간', 'Kawaramachi → AMANEK', 'https://www.google.com/maps/search/?api=1&query=HOTEL%20AMANEK%20Kyoto%20Kawaramachi%20Gojo', NULL, 0, '호텔 휴식', 'activity', '17:30', '19:30', 'HOTEL AMANEK Kyoto Kawaramachi Gojo', '첫날 체력 회복. 이후 저녁/대욕장만 진행.', '{"transport":"hotel","walking":"최소","rain":"완전 실내"}', '[]', 30),
+
+('decision-opt-0913-bath', 'decision-0913-after-dinner', 'AMANEK 대욕장', '기본 추천', '첫날 회복을 최우선으로 하는 고정점.', NULL, '20:30–21:30', '호텔 2F 대욕장', 'https://www.google.com/maps/search/?api=1&query=HOTEL%20AMANEK%20Kyoto%20Kawaramachi%20Gojo', 'https://amanek.jp/kyoto/', 1, 'AMANEK 대욕장', 'activity', '20:30', '21:30', 'HOTEL AMANEK Kyoto Kawaramachi Gojo', '첫날 계획된 대욕장 시간.', '{"transport":"hotel","walking":"0","rain":"완전 실내"}', '[]', 10),
+('decision-opt-0913-night-rest', 'decision-0913-after-dinner', '그냥 방에서 쉬기', '최소 동선', '피곤하면 대욕장도 생략하고 수면 우선.', NULL, '자유', '호텔', NULL, NULL, 0, '호텔 휴식 · early night', 'activity', '20:30', '21:30', 'HOTEL AMANEK Kyoto Kawaramachi Gojo', '도착일 피로가 크면 바로 휴식.', '{"transport":"hotel","walking":"0","rain":"완전 실내"}', '[]', 20),
+
+('decision-opt-0914-kiyomizu', 'decision-0914-morning', 'Kiyomizu-dera + Higashiyama', '기본 추천', '현재 핵심 일정. 비가 약하면 그대로 진행.', NULL, '08:30–11:10', 'Kiyomizu → Sannenzaka/Ninenzaka → Gion', 'https://www.google.com/maps/search/?api=1&query=Kiyomizu-dera', 'https://www.kiyomizudera.or.jp/en/', 1, 'Kiyomizu-dera', 'activity', '08:30', '10:00', 'Kiyomizu-dera', '비가 약하면 핵심 일정 유지.', '{"transport":"walk","walking":"경사 포함","rain":"강한 비면 체류 단축"}', '[]', 10),
+('decision-opt-0914-manga', 'decision-0914-morning', 'Kyoto International Manga Museum', '폭우 대안', '실내 비중이 높고 오전 시간을 안정적으로 보낼 수 있음.', NULL, '약 1.5–2시간', '호텔 → Karasuma Oike', 'https://www.google.com/maps/search/?api=1&query=Kyoto%20International%20Manga%20Museum', 'https://kyotomm.jp/en/', 0, 'Kyoto International Manga Museum', 'activity', '09:00', '10:45', 'Kyoto International Manga Museum', '폭우 시 Kiyomizu 대신 실내 대안.', '{"transport":"subway / bus","walking":"적음","rain":"실내"}', '[]', 20),
+
+('decision-opt-0914-gion', 'decision-0914-afternoon', 'Gion · Kawaramachi 산책', '기본 추천', '점심 뒤 현재 동선을 이어가되 비가 세지면 아케이드로 이동.', NULL, '12:00–14:30', 'Gion → Kawaramachi', 'https://www.google.com/maps/search/?api=1&query=Gion%20Kyoto', NULL, 1, 'Gion · Kawaramachi · covered arcade', 'activity', '12:00', '14:30', 'Gion / Kawaramachi', '날씨 좋으면 Gion, 비가 강하면 상점가 비중 확대.', '{"transport":"walk / short bus","walking":"약 2–3k","rain":"department store + arcade"}', '[]', 10),
+('decision-opt-0914-arcade', 'decision-0914-afternoon', 'Teramachi · Shinkyogoku 실내 위주', '우천 추천', '비가 강하면 골목보다 지붕 있는 쇼핑 아케이드에 집중.', NULL, '1.5–2시간', 'Kawaramachi covered arcade', 'https://www.google.com/maps/search/?api=1&query=Shinkyogoku%20Shopping%20Street%20Kyoto', NULL, 0, 'Teramachi · Shinkyogoku covered arcade', 'activity', '12:15', '14:15', 'Teramachi / Shinkyogoku', '우천 시 야외 골목 대신 아케이드.', '{"transport":"walk","walking":"약 1–2k","rain":"대부분 지붕 있음"}', '[]', 20),
+
+('decision-opt-0914-hotel-rest', 'decision-0914-recovery', '호텔 휴식 + 16:30 대욕장', '기본 추천', '오전 보행량을 회복하고 저녁 라멘 전에 쉬는 구조.', NULL, '15:00–17:30', 'AMANEK', NULL, 'https://amanek.jp/kyoto/', 1, NULL, NULL, NULL, NULL, NULL, NULL, '{}', '[]', 10),
+('decision-opt-0914-more-shopping', 'decision-0914-recovery', 'Kawaramachi 쇼핑 조금 더', '체력 남을 때', '비가 약하고 체력이 남을 때만. 대욕장 시간은 늦추지 않음.', NULL, '약 1시간', 'Kawaramachi', 'https://www.google.com/maps/search/?api=1&query=Kawaramachi%20Kyoto', NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, '{}', '[]', 20),
+
+('decision-opt-0915-fushimi', 'decision-0915-morning', 'Fushimi Inari 하단만', '조건부 기본', '비가 약할 때만 Senbon Torii 입구까지. 산 정상은 가지 않음.', NULL, '08:30–09:40', 'Kiyomizu-Gojo ↔ Fushimi-Inari', 'https://www.google.com/maps/search/?api=1&query=Fushimi%20Inari%20Taisha', 'https://inari.jp/en/', 1, 'Fushimi Inari · lower shrine only (CONDITIONAL)', 'activity', '08:30', '09:40', 'Fushimi Inari Taisha', '비가 약할 때만 하단 신사 + Senbon Torii 입구.', '{"transport":"Keihan","walking":"약 2–3k","rain":"폭우면 삭제"}', '[]', 10),
+('decision-opt-0915-slow', 'decision-0915-morning', '늦은 아침 + 체크아웃 준비', '폭우/피로', 'Fushimi를 통째로 빼고 호텔에서 여유 있게 출발.', NULL, '08:30–10:45', 'AMANEK', NULL, NULL, 0, 'Slow morning · hotel', 'activity', '08:30', '10:45', 'HOTEL AMANEK Kyoto Kawaramachi Gojo', '폭우나 피로 시 관광 추가 없이 체크아웃 준비.', '{"transport":"hotel","walking":"최소","rain":"실내"}', '["plan-event-0915-fushimi-return"]', 20),
+
+('decision-opt-0915-keihan', 'decision-0915-kyoto-osaka', 'Keihan + Osaka Metro', '숙소 동선 추천', 'AMANEK에서 Kiyomizu-Gojo가 가까워 Kyoto Station을 되돌아가지 않는다.', 'IC pay-as-you-go', '약 65분', 'Kiyomizu-Gojo → Kitahama → Ebisucho', 'https://www.google.com/maps/dir/?api=1&origin=Kiyomizu-Gojo%20Station&destination=Ebisucho%20Station%20Osaka&travelmode=transit', 'https://www.keihan.co.jp/travel/en/trains/', 1, 'Keihan · Kiyomizu-Gojo → Kitahama', 'train', '11:20', '12:10', 'Kiyomizu-Gojo Station → Kitahama Station', 'Keihan Main Line + Osaka Metro로 Nipponbashi 숙소권 이동.', '{"transport":"Keihan Railway","walking":"환승 포함","rain":"철도 중심"}', '[]', 10),
+('decision-opt-0915-jr', 'decision-0915-kyoto-osaka', 'JR Kyoto → Osaka + Metro', '열차 빈도', '교토역으로 먼저 돌아간 뒤 JR Special Rapid 계열을 쓰는 대안. 캐리어 이동은 더 길 수 있음.', '현장 IC 운임', '약 70–85분', '호텔 → Kyoto Station → Osaka/Umeda → Nipponbashi', 'https://www.google.com/maps/dir/?api=1&origin=HOTEL%20AMANEK%20Kyoto%20Kawaramachi%20Gojo&destination=Nipponbashi%20Crystal%20Hotel&travelmode=transit', 'https://www.westjr.co.jp/global/en/', 0, 'JR + Metro · Kyoto → Osaka hotel', 'train', '11:15', '12:35', 'Kyoto Station → Osaka Station → Nipponbashi', '교토역을 경유하는 대안. 현재 숙소 위치에서는 Keihan 안보다 동선이 길다.', '{"transport":"JR + Osaka Metro","walking":"교토역 이동 포함","rain":"철도 중심"}', '[]', 20),
+
+('decision-opt-0915-dotonbori', 'decision-0915-after-lunch', 'Dotonbori · Namba 낮 산책', '기본 추천', '첫날 오사카 분위기를 보고 간식/쇼핑까지 연결하기 쉬움.', NULL, '약 1시간', 'Dotonbori / Namba', 'https://www.google.com/maps/search/?api=1&query=Dotonbori%20Osaka', NULL, 1, 'Dotonbori · Namba 낮 산책', 'activity', '14:45', '15:50', 'Dotonbori / Namba', '오사카 첫날 낮 산책.', '{"transport":"walk","walking":"약 2k","rain":"covered shopping 확대"}', '[]', 10),
+('decision-opt-0915-hozenji', 'decision-0915-after-lunch', 'Hozenji Yokocho 짧게', '짧은 골목', 'Dotonbori 안에서 크게 벗어나지 않는 짧은 골목 선택.', NULL, '30–45분', 'Dotonbori → Hozenji Yokocho', 'https://www.google.com/maps/search/?api=1&query=Hozenji%20Yokocho%20Osaka', 'https://osaka-info.jp/en/spot/hozenji-yokocho/', 0, 'Hozenji Yokocho · short walk', 'activity', '14:50', '15:30', 'Hozenji Yokocho', '첫날 오사카에서 짧게 추가 가능한 골목.', '{"transport":"walk","walking":"짧음","rain":"우산 필요"}', '[]', 20),
+
+('decision-opt-0915-night', 'decision-0915-after-dinner', 'Dotonbori night · Glico', '기본 추천', '이미 근처에 있으므로 야경만 보고 숙소로 복귀.', NULL, '20:00–21:30', 'Dotonbori', 'https://www.google.com/maps/search/?api=1&query=Dotonbori%20Glico%20Sign', NULL, 1, 'Dotonbori night · Glico · snacks', 'activity', '20:00', '21:30', 'Dotonbori', '야경 + 간식. 피곤하면 바로 숙소 복귀.', '{"transport":"walk","walking":"약 2k","rain":"폭우면 단축"}', '[]', 10),
+('decision-opt-0915-hotel', 'decision-0915-after-dinner', '바로 호텔 복귀', '피로 우선', '체력이 떨어지면 야경은 9/16로 넘김.', NULL, '즉시', 'Dotonbori → Nipponbashi hotel', 'https://www.google.com/maps/dir/?api=1&origin=Dotonbori&destination=Nipponbashi%20Crystal%20Hotel&travelmode=walking', NULL, 0, '호텔 복귀 · rest', 'activity', '20:00', '21:00', 'Nipponbashi Crystal Hotel', 'Dotonbori 야경을 생략하고 회복.', '{"transport":"walk","walking":"최소","rain":"숙소 복귀"}', '[]', 20),
+
+('decision-opt-0916-castle', 'decision-0916-morning', 'Osaka Castle', '기본 추천', '박물관 내부까지 있어 약한 비에도 유지 가능.', NULL, '09:00–10:45', 'Osaka Castle', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Castle', 'https://www.osakacastle.net/english/', 1, 'Osaka Castle', 'activity', '09:00', '10:45', 'Osaka Castle', '입장권은 당일 결정. 비가 오면 박물관 내부 중심.', '{"transport":"walk from station","walking":"약 2–3k","rain":"박물관 중심"}', '[]', 10),
+('decision-opt-0916-housing', 'decision-0916-morning', 'Osaka Museum of Housing and Living', '폭우 대안', '실내 전시 중심이라 강한 비에 더 안정적.', NULL, '약 1.5–2시간', 'Nipponbashi → Tenjinbashisuji 6-chome', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Museum%20of%20Housing%20and%20Living', 'https://www.osaka-angenet.jp/konjyakukan/', 0, 'Osaka Museum of Housing and Living', 'activity', '09:00', '10:45', 'Osaka Museum of Housing and Living', '폭우면 Osaka Castle 공원 대신 실내.', '{"transport":"Osaka Metro","walking":"적음","rain":"실내"}', '[]', 20),
+
+('decision-opt-0916-shinsaibashi', 'decision-0916-after-lunch', 'Shinsaibashi covered arcade', '기본 추천', '남쪽으로 천천히 걸으며 Dotonbori까지 연결.', NULL, '13:00–14:30', 'Shinsaibashi-suji → Dotonbori', 'https://www.google.com/maps/search/?api=1&query=Shinsaibashi-suji%20Shopping%20Street', NULL, 1, 'Shinsaibashi covered arcade → Dotonbori', 'activity', '13:00', '14:30', 'Shinsaibashi-suji', '쇼핑/휴식 우선.', '{"transport":"walk","walking":"약 2–3k","rain":"covered arcade"}', '[]', 10),
+('decision-opt-0916-namba-parks', 'decision-0916-after-lunch', 'Namba Parks · 짧은 녹지/쇼핑', '짧은 대안', '호텔과 가까운 난바권에서 실내 쇼핑 + 옥상정원을 짧게 선택.', NULL, '약 1시간', 'Shinsaibashi → Namba Parks', 'https://www.google.com/maps/search/?api=1&query=Namba%20Parks%20Osaka', 'https://nambaparks.com/', 0, 'Namba Parks · short stop', 'activity', '13:15', '14:15', 'Namba Parks', '실내 쇼핑과 짧은 녹지 대안.', '{"transport":"Metro / walk","walking":"약 1–2k","rain":"실내 쇼핑 중심"}', '[]', 20),
+
+('decision-opt-0916-final-night', 'decision-0916-after-dinner', '마지막 Dotonbori night', '체력 남을 때', '여행 마지막 밤 분위기를 짧게 보고 복귀.', NULL, '20:00–21:00', 'Nipponbashi → Dotonbori', 'https://www.google.com/maps/search/?api=1&query=Dotonbori%20Osaka', NULL, 1, 'Optional · final Dotonbori night', 'activity', '20:00', '21:00', 'Dotonbori', '체력과 비 상태가 좋을 때만.', '{"transport":"walk","walking":"추가 약 1–2k","rain":"폭우/피로면 삭제"}', '[]', 10),
+('decision-opt-0916-rest', 'decision-0916-after-dinner', '호텔에서 쉬기', '회복', '이미 Dotonbori를 충분히 봤다면 마지막 밤은 쉬는 쪽.', NULL, '즉시', 'Nipponbashi hotel', NULL, NULL, 0, '호텔 휴식 · final night', 'activity', '20:00', '21:00', 'Nipponbashi Crystal Hotel', '마지막 야경을 생략하고 휴식.', '{"transport":"hotel","walking":"0","rain":"실내"}', '[]', 20),
+
+('decision-opt-0917-airport-express', 'decision-0917-kix', 'Nankai Airport Express', '가성비 추천', '추가 특급요금 없이 Tengachaya에서 KIX까지 바로 이동.', '기본운임', '약 45분', 'Tengachaya → Kansai-airport', 'https://www.google.com/maps/dir/?api=1&origin=Tengachaya%20Station&destination=Kansai-airport%20Station&travelmode=transit', 'https://www.nankai.co.jp/en_railway/traffic/express/airportexp.html', 1, 'Nankai Airport Express · Tengachaya → KIX', 'train', '07:30', '08:15', 'Tengachaya Station → Kansai-airport Station', 'Airport Express 기본. 좌석 지정 불필요.', '{"transport":"Nankai Airport Express","walking":"0","rain":"철도"}', '[]', 10),
+('decision-opt-0917-rapit', 'decision-0917-kix', 'Nankai Rapi:t', '좌석 편의', '지정좌석이 필요하거나 시간표가 더 잘 맞을 때만. 일반석은 기본운임에 특급요금 ¥520 추가.', '기본운임 + ¥520', '시간표별 확인', 'Tengachaya → Kansai-airport', 'https://www.google.com/maps/dir/?api=1&origin=Tengachaya%20Station&destination=Kansai-airport%20Station&travelmode=transit', 'https://www.nankai.co.jp/en_railway/traffic/express/rapit.html', 0, 'Nankai Rapi:t · Tengachaya → KIX', 'train', '07:30', '08:15', 'Tengachaya Station → Kansai-airport Station', '좌석 지정이 필요할 때만 Rapi:t. 실제 출발시각은 당일 시간표 확인.', '{"transport":"Nankai Rapi:t","walking":"0","rain":"철도"}', '[]', 20)
+ON CONFLICT(id) DO UPDATE SET
+  label=excluded.label, badge=excluded.badge, summary=excluded.summary, price=excluded.price,
+  duration=excluded.duration, route=excluded.route, map_url=excluded.map_url, source_url=excluded.source_url,
+  recommended=excluded.recommended, event_title=excluded.event_title, event_kind=excluded.event_kind,
+  event_start_time=excluded.event_start_time, event_end_time=excluded.event_end_time,
+  event_location=excluded.event_location, event_notes=excluded.event_notes,
+  event_meta_json=excluded.event_meta_json, hidden_event_ids_json=excluded.hidden_event_ids_json,
+  sort_order=excluded.sort_order, updated_at=CURRENT_TIMESTAMP;
+
+-- Preserve a traveler's selected decision when this canonical migration is
+-- re-run. Baseline itinerary rows are upserted earlier in the script, so the
+-- selected option must be applied again afterwards just like meal choices.
+UPDATE events
+SET
+  title = (SELECT dopt.event_title FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  kind = (SELECT dopt.event_kind FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  start_time = (SELECT dopt.event_start_time FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  end_time = (SELECT dopt.event_end_time FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  location = (SELECT dopt.event_location FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  notes = (SELECT dopt.event_notes FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  meta_json = (SELECT dopt.event_meta_json FROM decision_slots ds JOIN decision_options dopt ON dopt.id=ds.selected_option_id WHERE ds.event_id=events.id),
+  updated_at = CURRENT_TIMESTAMP
+WHERE id IN (
+  SELECT ds.event_id FROM decision_slots ds
+  JOIN decision_options dopt ON dopt.id=ds.selected_option_id
+  WHERE ds.event_id IS NOT NULL AND dopt.event_title IS NOT NULL
+);
 
 -- If a traveler has already changed a meal choice, restore that chosen restaurant
 -- onto the linked schedule event after the baseline event upsert above.
