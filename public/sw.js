@@ -1,4 +1,4 @@
-const CACHE = 'mytrip-2026-v2';
+const CACHE = 'mytrip-2026-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -42,13 +42,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then(async (response) => {
-      if (response.ok) {
-        const cache = await caches.open(CACHE);
-        await cache.put(request, response.clone());
-      }
-      return response;
-    })),
-  );
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  event.respondWith(caches.match(request).then((cached) => cached || networkFirst(request)));
 });

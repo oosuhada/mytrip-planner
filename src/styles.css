@@ -48,3 +48,33 @@
 
 @media(max-width:1050px){.transport-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.restaurant-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.mobile-tabs{overflow-x:auto}.mobile-tabs button{flex:0 0 16%;min-width:48px}.guide-page{padding:16px 12px 90px}.guide-hero{align-items:stretch}.guide-hero h2{font-size:21px}.guide-hero>div:first-child>p:last-child{font-size:9px}.guide-progress{min-width:100px;padding:10px}.guide-progress strong{font-size:18px}.guide-rule-strip{grid-template-columns:1fr}.guide-columns{grid-template-columns:1fr}.guide-check-groups{grid-template-columns:1fr}.transport-grid,.connectivity-section .transport-grid,.restaurant-grid{grid-template-columns:1fr}.guide-section{padding:13px}.reservation-row strong{font-size:9.5px}.restaurant-card h4{font-size:11.5px}}
+
+/* Final guide layout guardrails — keep after the base guide rules. */
+.guide-check-groups{gap:20px}
+.guide-check-group{min-width:0}
+.guide-check-group h4{font-size:10px;margin:4px 0 8px}
+.guide-check{display:flex;grid-template-columns:none;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #ece9e1}
+.guide-check:last-child{border-bottom:0}
+.guide-check-main{flex:1 1 auto;min-width:0;width:auto;display:grid;grid-template-columns:20px minmax(0,1fr);gap:9px;align-items:start;padding:0}
+.guide-check-main>span:last-child{min-width:0}
+.guide-check strong{font-size:11px;line-height:1.35;word-break:keep-all}
+.guide-check small{font-size:9px;line-height:1.5;margin-top:4px;word-break:keep-all}
+.guide-check em{font-size:8.5px;line-height:1.45;margin-top:4px}
+.guide-link{flex:0 0 auto;align-self:flex-start;margin:0;padding:6px 8px;font-size:8px;white-space:nowrap}
+.reservation-row{padding:9px 0}
+.reservation-row strong{font-size:11px}
+.reservation-row small{font-size:8.5px}
+.restaurant-card h4{font-size:12.5px}
+.restaurant-card dd,.restaurant-card>p,.diet-note{font-size:8.5px}
+
+@media(max-width:1050px){
+  .guide-check-groups{grid-template-columns:1fr}
+}
+@media(max-width:720px){
+  .guide-check{gap:8px}
+  .guide-check-main{grid-template-columns:20px minmax(0,1fr)}
+  .guide-link{padding:6px;font-size:0}
+  .guide-link svg{width:13px;height:13px}
+  .guide-check strong{font-size:11px}
+  .guide-check small{font-size:9px}
+}
