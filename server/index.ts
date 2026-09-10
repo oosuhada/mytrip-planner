@@ -314,6 +314,10 @@ function plainDateDiffDays(start: string, end: string) {
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(__dirname, '../dist');
+  app.get('/sw.js', (_req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.sendFile(path.join(dist, 'sw.js'));
+  });
   app.use(express.static(dist, { maxAge: '1h' }));
   app.get('*splat', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
