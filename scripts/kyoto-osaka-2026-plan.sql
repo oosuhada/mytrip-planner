@@ -149,6 +149,7 @@ INSERT INTO restaurants (
 ('plan-rest-yamamoto-hamburg', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Yamamoto no Hamburg Shinsaibashi', 'Osaka', '2026-09-16', '11:30', '11:00–22:00, food L.O. 21:30', '약 ¥2,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', NULL, '예약 불가. 점심 러시가 커지기 전 입장.', '기본 함박 중심. 내장·매운 토핑은 피한다.', 70),
 ('plan-rest-daiki-dotonbori', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Daiki Suisan Kaitenzushi Dotonbori', 'Osaka', '2026-09-16', '15:00', '11:00–23:00', '약 ¥2,000–¥4,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in / 혼잡 시 공식 앱·LINE 순번 접수 가능 여부 확인', 'https://www.daiki-suisan.co.jp/shop/kaitenzushi/doutonbori/', '공식 FAQ상 좌석 예약은 받지 않는다. 15시 비혼잡 시간대에 예산 상한을 정해 이용.', 'Domenic은 생선만 선택하고 우니·조개/갑각류 제외. Oosu는 매운 군함/소스 제외.', 80),
 ('plan-rest-ohsho-nipponbashi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Ohsho Nipponbashi', 'Osaka', '2026-09-16', '19:00', '공식: 일–목 11:00–24:00 (L.O. 23:30) / 금·토 11:00–25:00 (L.O. 24:00), 정기휴일 없음', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://www.osaka-ohsho.com/store/detail.php?area=osaka&id=nipponbashi', 'Tabelog의 11:00–22:00·화요일 휴무 표기는 공식 최신 매장 정보와 충돌하므로 공식 정보를 우선.', '교자 + 볶음밥/비매운 면. Oosu는 매운 메뉴 제외, Domenic은 내장 메뉴 제외.', 90),
+('plan-rest-gyoza-ohsho-denden', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Gyoza no Ohsho Nihombashi-Denden-Town', 'Osaka', '2026-09-16', '19:00', '공식: 월–토 11:00–25:00 (L.O. 24:45) / 일·공휴일 11:00–24:15 (L.O. 24:00)', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://map.ohsho.co.jp/b/ohsho/info/4874/', 'Nipponbashi 4-11-6. 숙소와 같은 닛폰바시 권역의 교자 대안.', '교자 + 볶음밥/면 중심. Oosu는 매운 메뉴 제외, Domenic은 내장 메뉴 제외.', 95),
 ('plan-rest-kix-nishiya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Tenma Sushi Nishiya', 'KIX', '2026-09-17', '09:00', '07:00–22:00', '약 ¥1,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://www.kansai-airport.or.jp/en/dine/d091', 'KIX Terminal 1 2F 보안검색 전. 마지막 초밥 후 바로 보안검색/출국심사로 이동.', 'Domenic은 생선 초밥 중심. Oosu는 매운 소스 제외.', 100),
 ('plan-rest-musashi-sanjo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushi no Musashi Sanjo Honten', 'Kyoto', NULL, NULL, '11:00–21:45, 최종입점 21:20', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://sushinomusashi.com/', 'Sanjo/Kawaramachi 쪽 회전초밥 대안. 예약 불가.', 'Domenic은 참치·연어·흰살 등 생선 위주로 고르고 우니·조개/갑각류 제외. Oosu는 매운 토핑 제외.', 110),
 ('plan-rest-sen-no-kaze', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Ramen Sen no Kaze Kyoto', 'Kyoto', NULL, NULL, '11:30–21:00', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://ramensennokazekyoto.com/', 'Teramachi/Kawaramachi 저녁 라멘 대안. 줄이 길 수 있어 현장 대기 기준.', 'Domenic은 조개류 알레르기 표기가 있는 Kyo no Shio 계열을 피하고 간장계열 성분을 현장에서 재확인. Oosu는 매운 메뉴 제외.', 120),
@@ -182,6 +183,7 @@ VALUES
 ('plan-place-rest-yamamoto', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Yamamoto no Hamburg Shinsaibashi', 'restaurant', 'Shinsaibashi, Osaka', NULL, NULL, '함박 · walk-in · 9/16 점심 후보', 'travel-plan'),
 ('plan-place-rest-fukuyoshi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Fukuyoshi Osaka Shinsaibashi', 'restaurant', '2-4-23 Higashishinsaibashi, Chuo Ward, Osaka', NULL, NULL, '함박 · 9/16 점심 대안', 'travel-plan'),
 ('plan-place-rest-ohsho', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Ohsho Nipponbashi', 'restaurant', 'Nipponbashi, Osaka', NULL, NULL, '교자 · 볶음밥 · 숙소 근처', 'travel-plan'),
+('plan-place-rest-gyoza-ohsho-denden', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Gyoza no Ohsho Nihombashi-Denden-Town', 'restaurant', '4-11-6 Nipponbashi, Naniwa Ward, Osaka', NULL, NULL, '교자 · 볶음밥 · 숙소 근처 대안', 'travel-plan'),
 ('plan-place-rest-nishiya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Tenma Sushi Nishiya', 'restaurant', 'KIX Terminal 1 2F before security', NULL, NULL, '공항 출국 전 초밥', 'travel-plan')
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, name=excluded.name, category=excluded.category,
@@ -203,6 +205,7 @@ VALUES
 ('plan-rest-yamamoto-hamburg', 'plan-place-rest-yamamoto', 'https://www.google.com/maps/search/?api=1&query=Yamamoto%20no%20Hamburg%20Shinsaibashi', NULL, NULL, 'https://tabelog.com/osaka/A2701/A270201/27156166/'),
 ('plan-rest-fukuyoshi-shinsaibashi', 'plan-place-rest-fukuyoshi', 'https://www.google.com/maps/search/?api=1&query=Fukuyoshi%20Osaka%20Shinsaibashi', NULL, NULL, NULL),
 ('plan-rest-ohsho-nipponbashi', 'plan-place-rest-ohsho', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Ohsho%20Nipponbashi', 'https://www.osaka-ohsho.com/menu/', 'https://www.osaka-ohsho.com/assets/images/common/bnr_gyoza-biz.jpg', 'https://www.osaka-ohsho.com/store/detail.php?area=osaka&id=nipponbashi'),
+('plan-rest-gyoza-ohsho-denden', 'plan-place-rest-gyoza-ohsho-denden', 'https://www.google.com/maps/search/?api=1&query=Gyoza%20no%20Ohsho%20Nihombashi%20Denden%20Town', 'https://www.ohsho.co.jp/menu/', NULL, 'https://map.ohsho.co.jp/b/ohsho/info/4874/'),
 ('plan-rest-kix-nishiya', 'plan-place-rest-nishiya', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Tenma%20Sushi%20Nishiya%20Kansai%20Airport', 'https://www.kansai-airport.or.jp/en/dine/d091', NULL, 'https://www.kansai-airport.or.jp/en/dine/d091')
 ON CONFLICT(restaurant_id) DO UPDATE SET
   place_id=excluded.place_id, google_maps_url=excluded.google_maps_url,
@@ -362,6 +365,7 @@ VALUES
 ('meal-0916-afternoon-sushi', 'plan-rest-genroku-dotonbori', 20),
 ('meal-0916-afternoon-sushi', 'plan-rest-kura-dotonbori', 30),
 ('meal-0916-dinner-gyoza', 'plan-rest-ohsho-nipponbashi', 10),
+('meal-0916-dinner-gyoza', 'plan-rest-gyoza-ohsho-denden', 20),
 ('meal-0917-airport-sushi', 'plan-rest-kix-nishiya', 10)
 ON CONFLICT(meal_slot_id, restaurant_id) DO UPDATE SET sort_order=excluded.sort_order;
 

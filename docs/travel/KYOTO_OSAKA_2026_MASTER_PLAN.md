@@ -213,6 +213,7 @@ Official store/booking systems take precedence over aggregators when they confli
 | **Yamamoto no Hamburg Shinsaibashi** | 9/16 11:30 | 11:00–22:00; food L.O. 21:30 | ~¥2,000–¥3,000/person | **WALK-IN ONLY** | Walk-in; reservations unavailable |
 | **Daiki Suisan Kaitenzushi Dotonbori** | 9/16 15:00 | 11:00–23:00 | ~¥2,000–¥4,000/person | **WALK-IN ONLY** | No seat reservations; at congestion some stores support app/LINE queue reception |
 | **Osaka Ohsho Nipponbashi** | 9/16 19:00 | **Official: Sun–Thu 11:00–24:00 (L.O. 23:30); Fri/Sat 11:00–25:00 (L.O. 24:00); no regular holiday** | ~¥1,000–¥2,000/person | **WALK-IN ONLY** | Walk-in |
+| **Gyoza no Ohsho Nihombashi-Denden-Town** | 9/16 dinner option | Mon–Sat 11:00–25:00 (L.O. 24:45); Sun/holidays 11:00–24:15 (L.O. 24:00) | ~¥1,000–¥2,000/person | **WALK-IN ONLY** | Walk-in; second gyoza option in the hotel/Nipponbashi area |
 | **Osaka Tenma Sushi Nishiya — KIX** | 9/17 09:00 | 07:00–22:00 | ~¥1,000–¥3,000/person | **WALK-IN ONLY** | Walk-in; KIX T1 2F before security |
 
 ### Important corrections from older listings
@@ -228,7 +229,7 @@ Official store/booking systems take precedence over aggregators when they confli
 - Restaurant candidates are shared with **Candidates · Voting**, including vote count, Google Maps, menu/photo link and available official thumbnail.
 - Current defaults remain Kura Kyoto Teramachi, Sushiro Kyoto Gion, Ramen YUCHO, Genrokuzushi, CHIBO, Yamamoto no Hamburg, Daiki Suisan, Osaka Ohsho and KIX Nishiya until changed in the site.
 
-Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sanjo Honten**, **Ramen Sen no Kaze Kyoto**, **Kura Sushi Dotonbori Global Flagship**, **Ajinoya Honten** and **Fukuyoshi Osaka Shinsaibashi**. A candidate changing in the site is a user decision; the canonical route/time block remains unless the linked meal slot is changed.
+Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sanjo Honten**, **Ramen Sen no Kaze Kyoto**, **Kura Sushi Dotonbori Global Flagship**, **Ajinoya Honten**, **Fukuyoshi Osaka Shinsaibashi** and **Gyoza no Ohsho Nihombashi-Denden-Town**. A candidate changing in the site is a user decision; the canonical route/time block remains unless the linked meal slot is changed.
 
 ### Restaurant source links
 
@@ -241,6 +242,7 @@ Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sa
 - Yamamoto no Hamburg: https://tabelog.com/osaka/A2701/A270201/27154000/
 - Daiki Suisan official: https://www.daiki-suisan.co.jp/shop/kaitenzushi/doutonbori/
 - Osaka Ohsho official: https://www.osaka-ohsho.com/store/detail.php?area=osaka&id=nipponbashi
+- Gyoza no Ohsho Nihombashi-Denden-Town official: https://map.ohsho.co.jp/b/ohsho/info/4874/
 - KIX Nishiya official: https://www.kansai-airport.or.jp/en/dine/d091
 
 ---
