@@ -66,10 +66,16 @@ Canonical status: **this file is the human-readable source of truth for the trav
 
 | Time | Plan | Transport / notes |
 |---|---|---|
+| 05:08–05:20 | **Home → Hongik Univ. AREX** | Walk from 10 Wausan-ro 38-gil (Donggyo-dong 188-6); about 7 min normally, 12 min budgeted with luggage |
+| 05:28–06:22 | **AREX first train · Hongik Univ. → ICN T1** | All-stop train. 05:28 is the current first airport-bound train; 05:47 is a fallback, while 05:57 or later is too tight for comfort |
+| 06:22–07:35 | **ICN T1 security / departure immigration / gate** | Assumes T’way online check-in is already complete and there is no currency exchange or other counter errand; weekend security lines are the main risk |
 | 08:00–10:05 | T’way ICN → KIX | Confirmed booking |
-| ~10:05–11:15 | Immigration + baggage | Do not rush; train time is flexible |
-| ~11:15–13:00 | **HARUKA KIX → Kyoto Station** | JR HARUKA; official one-way adult baseline ¥2,200 |
-| ~13:05–14:00 | Kyoto Station → AMANEK / leave bags | Kyoto Subway Karasuma Line **Kyoto → Gojo**, then walk; no taxi |
+| 10:05–10:55 | **KIX T1 immigration / arrival** | Visit Japan Web QR ready; allow 30–60 min variation. Collect checked baggage here only if applicable |
+| 10:55–11:10 | **KIX T1 → Kansai-airport Station** | Walk via the Terminal 1 2F / AEROPLAZA direct connection |
+| ~11:15–12:30 | **HARUKA KIX → Kyoto Station** | About 75 min. 11:15 is a target; take the next train if immigration runs long. Official one-way adult baseline ¥2,200 |
+| 12:35–12:50 | **Kyoto Station → Gojo Station** | Kyoto Subway Karasuma Line, one stop |
+| 12:50–13:05 | **Gojo Station → AMANEK** | Walk; no taxi |
+| 13:05–13:25 | AMANEK bag drop / ask about early check-in | Confirmed check-in remains at 15:00 |
 | 15:00 | Check-in / short rest | Confirmed hotel |
 | 16:30–17:30 | **Kura Sushi Kyoto Teramachi** | **RESERVE NOW**; official web/app |
 | 17:30–19:30 | Teramachi / Shinkyogoku / Nishiki area | Slow covered-arcade walk; no Kiyomizu/Fushimi today |
@@ -123,8 +129,12 @@ Canonical status: **this file is the human-readable source of truth for the trav
 | 08:30–09:40 | **Fushimi Inari — lower shrine only, CONDITIONAL** | Keihan Kiyomizu-Gojo ↔ Fushimi-Inari; lower shrine + beginning of Senbon Torii only; **no mountain climb** |
 | ~10:15 | Return hotel | Pack / rest |
 | 11:00 | AMANEK checkout | Confirmed booking |
-| ~11:15–12:45 | **Kyoto → Osaka** | Keihan from Kiyomizu-Gojo toward Kitahama (transfer if required by train type) → Osaka Metro Sakaisuji Line to Ebisucho; no Shinkansen |
-| ~13:00 | Nipponbashi Crystal Hotel | Leave bags / check room availability |
+| 09:40–10:15 | **Fushimi-Inari → AMANEK** | Keihan back to Kiyomizu-Gojo, then walk to hotel. Delete with Fushimi in heavy rain |
+| 11:05–11:15 | **AMANEK → Kiyomizu-Gojo Station** | Walk with luggage after checkout |
+| 11:20–12:10 | **Keihan Kiyomizu-Gojo → Kitahama** | Ordinary/express rail; transfer if required by train type; no Shinkansen |
+| 12:10–12:25 | **Osaka Metro Kitahama → Ebisucho** | Sakaisuji Line |
+| 12:25–12:35 | **Ebisucho → Nipponbashi Crystal Hotel** | Short walk with luggage |
+| 12:35–13:00 | Nipponbashi Crystal Hotel | Leave bags / check room availability |
 | 14:00–14:45 | **Genrokuzushi Dotonbori** | **WALK-IN ONLY**; first Osaka sushi |
 | 14:45–15:50 | Dotonbori / Namba in daylight | Food/shopping base, not a one-time photo stop |
 | 16:00–16:30 | **Rikuro’s Namba Main Store** | **WALK-IN ONLY**; cafe L.O. 16:30, otherwise takeout |
@@ -174,12 +184,17 @@ Canonical status: **this file is the human-readable source of truth for the trav
 | Time | Plan | Transport / notes |
 |---|---|---|
 | 06:30–06:45 | Wake | Final packing |
-| 07:15 | Leave hotel | No taxi |
-| 07:15–08:50 | **Ebisucho → Tengachaya → KIX** | Osaka Metro Sakaisuji Line → **Nankai Airport Express**; Rapi:t only if disruption/timing risk makes it necessary |
-| 08:45–09:00 target | Arrive KIX T1 | Maintain airport buffer |
+| 07:05–07:15 | **Nipponbashi Crystal Hotel → Ebisucho** | Walk with luggage |
+| 07:15–07:25 | **Osaka Metro Ebisucho → Tengachaya** | Sakaisuji Line |
+| 07:30–08:15 | **Nankai Airport Express Tengachaya → KIX** | Rapi:t only if disruption/timing risk makes it necessary |
+| 08:15–08:25 | **Kansai-airport Station → KIX T1** | Direct indoor connection |
+| 08:25–08:40 | KIX T1 departure floor / boarding-pass check | Assumes online check-in is already complete and there is no counter errand |
 | 09:00–09:30 | **Osaka Tenma Sushi Nishiya** | **WALK-IN ONLY**, KIX T1 2F **before security** |
-| 09:30 onward | Security / immigration | Do not linger after sushi |
+| 09:30–10:40 | Security / immigration / gate | Do not linger after sushi |
 | 11:35–13:30 | T’way KIX → ICN | Confirmed booking |
+| 13:30–14:15 | ICN T1 immigration / arrival | Collect checked baggage only if applicable |
+| 14:15–15:05 | **AREX ICN T1 → Hongik Univ.** | All-stop train, about 50 min |
+| 15:05–15:15 | **Hongik Univ. → home** | Walk about 7–10 min |
 
 ---
 
