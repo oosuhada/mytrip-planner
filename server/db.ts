@@ -160,6 +160,70 @@ CREATE TABLE IF NOT EXISTS trip_guides (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trip_guides_trip ON trip_guides(trip_id, section, sort_order);
+
+CREATE TABLE IF NOT EXISTS trip_options (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  group_key TEXT NOT NULL,
+  group_title TEXT NOT NULL,
+  name TEXT NOT NULL,
+  price TEXT,
+  coverage TEXT,
+  fit TEXT,
+  verdict TEXT,
+  purchase_url TEXT,
+  source_url TEXT,
+  action_label TEXT,
+  recommended INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_options_trip ON trip_options(trip_id, group_key, sort_order);
+
+CREATE TABLE IF NOT EXISTS restaurant_links (
+  restaurant_id TEXT PRIMARY KEY REFERENCES restaurants(id) ON DELETE CASCADE,
+  place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  google_maps_url TEXT,
+  menu_url TEXT,
+  image_url TEXT,
+  source_url TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_restaurant_links_place ON restaurant_links(place_id);
+
+CREATE TABLE IF NOT EXISTS meal_slots (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  time TEXT,
+  label TEXT NOT NULL,
+  meal_type TEXT,
+  area TEXT,
+  event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+  selected_restaurant_id TEXT REFERENCES restaurants(id) ON DELETE SET NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_meal_slots_trip ON meal_slots(trip_id, date, sort_order);
+
+CREATE TABLE IF NOT EXISTS meal_slot_options (
+  meal_slot_id TEXT NOT NULL REFERENCES meal_slots(id) ON DELETE CASCADE,
+  restaurant_id TEXT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(meal_slot_id, restaurant_id)
+);
+
+CREATE TABLE IF NOT EXISTS checklist_packing_links (
+  checklist_id TEXT NOT NULL REFERENCES trip_checklist_items(id) ON DELETE CASCADE,
+  packing_id TEXT NOT NULL REFERENCES packing_items(id) ON DELETE CASCADE,
+  PRIMARY KEY(checklist_id, packing_id)
+);
 `);
 
 ensureColumn('packing_items', 'bag_id', 'TEXT');
@@ -189,17 +253,59 @@ export function getTrip(tripId: string) {
   const participants = db.prepare('SELECT * FROM participants WHERE trip_id = ? ORDER BY created_at').all(tripId);
   const events = db.prepare('SELECT * FROM events WHERE trip_id = ? ORDER BY date, COALESCE(start_time, \'99:99\'), sort_order, created_at').all(tripId)
     .map((row: any) => ({ ...row, meta: safeJson(row.meta_json) }));
-  const places = db.prepare(`
+  const rawPlaces = db.prepare(`
     SELECT p.*, COALESCE(SUM(v.value), 0) AS vote_score, COUNT(v.id) AS vote_count
     FROM places p LEFT JOIN votes v ON v.place_id = p.id
     WHERE p.trip_id = ? GROUP BY p.id ORDER BY vote_score DESC, p.created_at
   `).all(tripId);
-  const packing = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at').all(tripId);
+  const rawPacking = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at').all(tripId) as any[];
   const packing_bags = db.prepare('SELECT * FROM packing_bags WHERE trip_id = ? ORDER BY created_at').all(tripId);
-  const checklist = db.prepare('SELECT * FROM trip_checklist_items WHERE trip_id = ? ORDER BY sort_order, created_at').all(tripId);
-  const restaurants = db.prepare('SELECT * FROM restaurants WHERE trip_id = ? ORDER BY COALESCE(planned_date, \'9999-12-31\'), sort_order, created_at').all(tripId);
+  const rawChecklist = db.prepare('SELECT * FROM trip_checklist_items WHERE trip_id = ? ORDER BY sort_order, created_at').all(tripId) as any[];
+  const checklistPackingLinks = db.prepare(`
+    SELECT cpl.* FROM checklist_packing_links cpl
+    JOIN trip_checklist_items c ON c.id = cpl.checklist_id WHERE c.trip_id = ?
+  `).all(tripId) as any[];
+  const packingIdsByChecklist = new Map<string, string[]>();
+  const checklistIdsByPacking = new Map<string, string[]>();
+  for (const link of checklistPackingLinks) {
+    const list = packingIdsByChecklist.get(link.checklist_id) || [];
+    list.push(link.packing_id);
+    packingIdsByChecklist.set(link.checklist_id, list);
+    const reverse = checklistIdsByPacking.get(link.packing_id) || [];
+    reverse.push(link.checklist_id);
+    checklistIdsByPacking.set(link.packing_id, reverse);
+  }
+  const checklist = rawChecklist.map((item) => ({ ...item, packing_ids: packingIdsByChecklist.get(item.id) || [] }));
+  const packing = rawPacking.map((item) => ({ ...item, checklist_ids: checklistIdsByPacking.get(item.id) || [] }));
+  const restaurants = db.prepare('SELECT * FROM restaurants WHERE trip_id = ? ORDER BY COALESCE(planned_date, \'9999-12-31\'), sort_order, created_at').all(tripId) as any[];
   const guides = db.prepare('SELECT * FROM trip_guides WHERE trip_id = ? ORDER BY section, sort_order, created_at').all(tripId);
-  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants, guides };
+  const options = db.prepare('SELECT * FROM trip_options WHERE trip_id = ? ORDER BY group_key, sort_order, created_at').all(tripId);
+  const restaurantLinks = db.prepare(`
+    SELECT rl.*, COALESCE(SUM(v.value), 0) AS vote_score, COUNT(v.id) AS vote_count
+    FROM restaurant_links rl
+    JOIN restaurants r ON r.id = rl.restaurant_id
+    JOIN places p ON p.id = rl.place_id
+    LEFT JOIN votes v ON v.place_id = p.id
+    WHERE r.trip_id = ? GROUP BY rl.restaurant_id
+  `).all(tripId) as any[];
+  const linkByRestaurant = new Map(restaurantLinks.map((link) => [link.restaurant_id, link]));
+  const restaurantByPlace = new Map(restaurantLinks.map((link) => [link.place_id, link.restaurant_id]));
+  const richRestaurants = restaurants.map((restaurant) => ({ ...restaurant, ...(linkByRestaurant.get(restaurant.id) || {}) }));
+  const mealSlots = db.prepare('SELECT * FROM meal_slots WHERE trip_id = ? ORDER BY date, sort_order, created_at').all(tripId) as any[];
+  const mealSlotOptions = db.prepare(`
+    SELECT mso.* FROM meal_slot_options mso
+    JOIN meal_slots ms ON ms.id = mso.meal_slot_id
+    WHERE ms.trip_id = ? ORDER BY ms.date, ms.sort_order, mso.sort_order
+  `).all(tripId) as any[];
+  const optionIdsBySlot = new Map<string, string[]>();
+  for (const option of mealSlotOptions) {
+    const list = optionIdsBySlot.get(option.meal_slot_id) || [];
+    list.push(option.restaurant_id);
+    optionIdsBySlot.set(option.meal_slot_id, list);
+  }
+  const richMealSlots = mealSlots.map((slot) => ({ ...slot, option_ids: optionIdsBySlot.get(slot.id) || [] }));
+  const places = (rawPlaces as any[]).map((place) => ({ ...place, restaurant_id: restaurantByPlace.get(place.id) || null }));
+  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots };
 }
 
 function safeJson(value: string) {

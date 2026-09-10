@@ -222,10 +222,13 @@ Official store/booking systems take precedence over aggregators when they confli
 
 ### Reservation state at plan creation
 
-- Kura Sushi Kyoto Teramachi — **TODO → BOOKED after reservation**
-- Sushiro Kyoto Gion — **TODO → BOOKED after reservation**
-- CHIBO Dotonbori — **TODO → BOOKED after reservation**
-- All other restaurants above — **WALK-IN**
+- Restaurant planning is now **meal-slot based**, not a single permanently fixed restaurant per meal.
+- Key lunch/dinner slots expose **2–3 candidates** in MyTrip; choosing one updates the linked schedule event.
+- The reservation checklist only requires **BOOKED** for the restaurant currently selected in a meal slot when that restaurant is marked `RESERVE NOW`.
+- Restaurant candidates are shared with **Candidates · Voting**, including vote count, Google Maps, menu/photo link and available official thumbnail.
+- Current defaults remain Kura Kyoto Teramachi, Sushiro Kyoto Gion, Ramen YUCHO, Genrokuzushi, CHIBO, Yamamoto no Hamburg, Daiki Suisan, Osaka Ohsho and KIX Nishiya until changed in the site.
+
+Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sanjo Honten**, **Ramen Sen no Kaze Kyoto**, **Kura Sushi Dotonbori Global Flagship**, **Ajinoya Honten** and **Fukuyoshi Osaka Shinsaibashi**. A candidate changing in the site is a user decision; the canonical route/time block remains unless the linked meal slot is changed.
 
 ### Restaurant source links
 
@@ -347,6 +350,20 @@ Use **pay-as-you-go ICOCA / compatible IC transit payment** for local transport.
 - **JR-WEST / HARUKA:** use the HARUKA ticket/QR and ICOCA-compatible transport IC where applicable; do not assume a normal bank-card tap works at JR-West gates.
 
 **Decision for this trip:** a contactless bank card can reduce ICOCA usage in Osaka, but because Kyoto City Bus/Subway and Keihan are part of the actual itinerary, **ICOCA (or another nationwide-compatible transit IC) remains the simplest all-route local-payment fallback**. Do not buy a Kyoto/Kansai unlimited pass solely to avoid carrying ICOCA.
+
+## Pass options shown side-by-side in MyTrip
+
+The site now separates **Kyoto transport / Osaka transport / eSIM** into independent comparison tables with live purchase/info links instead of grouping them under one “connectivity” card.
+
+- **Kyoto Subway & Bus 1-Day Pass:** official adult price **¥1,100**.
+- **Klook Kyoto Subway & Bus 1-Day:** currently shown at **₩11,100/adult**; the voucher must be exchanged at the **Limon Welcome Desk in KIX Terminal 1**, so it is not simply a mobile ticket to buy after reaching Kyoto. Compare its final KRW price with official ¥1,100.
+- **Keihan Kyoto Sightseeing Pass:** **¥1,100 1-day / ¥1,300 24h**.
+- **Keihan Kyoto-Osaka Sightseeing Pass:** **¥1,650 1-day / ¥1,850 24h**.
+- **Osaka Enjoy Eco Card:** **¥820 weekday / ¥620 weekends & holidays**.
+- **Klook Osaka Metro + City Bus 1-Day QR:** currently **₩8,900/adult**.
+- **Osaka Amazing Pass:** **¥3,500/1-day**; not a value fit for the current low-attraction-count itinerary.
+
+For the current itinerary the site recommends **ICOCA/pay-as-you-go in Kyoto** and **card tap or ICOCA/pay-as-you-go in Osaka**, while still making each pass purchasable from the comparison table if the plan changes.
 
 ## Do not pre-buy a broad Kansai transport pass
 

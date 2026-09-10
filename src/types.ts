@@ -40,6 +40,7 @@ export type Place = {
   saved_by?: string | null;
   vote_score: number;
   vote_count: number;
+  restaurant_id?: string | null;
 };
 
 export type PackingItem = {
@@ -53,6 +54,7 @@ export type PackingItem = {
   source?: string | null;
   checked: number;
   reason?: string | null;
+  checklist_ids?: string[];
 };
 
 export type PackingBag = {
@@ -73,6 +75,7 @@ export type TripChecklistItem = {
   notes?: string | null;
   url?: string | null;
   sort_order: number;
+  packing_ids?: string[];
 };
 
 export type Restaurant = {
@@ -90,6 +93,13 @@ export type Restaurant = {
   notes?: string | null;
   dietary_notes?: string | null;
   sort_order: number;
+  place_id?: string | null;
+  google_maps_url?: string | null;
+  menu_url?: string | null;
+  image_url?: string | null;
+  source_url?: string | null;
+  vote_score?: number;
+  vote_count?: number;
 };
 
 export type TripGuide = {
@@ -98,6 +108,35 @@ export type TripGuide = {
   title: string;
   subtitle?: string | null;
   details?: string | null;
+  sort_order: number;
+};
+
+export type TripOption = {
+  id: string;
+  group_key: string;
+  group_title: string;
+  name: string;
+  price?: string | null;
+  coverage?: string | null;
+  fit?: string | null;
+  verdict?: string | null;
+  purchase_url?: string | null;
+  source_url?: string | null;
+  action_label?: string | null;
+  recommended: number;
+  sort_order: number;
+};
+
+export type MealSlot = {
+  id: string;
+  date: string;
+  time?: string | null;
+  label: string;
+  meal_type?: string | null;
+  area?: string | null;
+  event_id?: string | null;
+  selected_restaurant_id?: string | null;
+  option_ids: string[];
   sort_order: number;
 };
 
@@ -110,6 +149,8 @@ export type Trip = TripSummary & {
   checklist: TripChecklistItem[];
   restaurants: Restaurant[];
   guides: TripGuide[];
+  options: TripOption[];
+  meal_slots: MealSlot[];
 };
 
 export type WeatherDay = { date: string; code: number; max: number; min: number; rain: number };

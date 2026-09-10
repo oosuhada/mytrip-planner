@@ -52,6 +52,67 @@ CREATE TABLE IF NOT EXISTS trip_guides (
 
 CREATE INDEX IF NOT EXISTS idx_trip_guides_trip ON trip_guides(trip_id, section, sort_order);
 
+CREATE TABLE IF NOT EXISTS trip_options (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  group_key TEXT NOT NULL,
+  group_title TEXT NOT NULL,
+  name TEXT NOT NULL,
+  price TEXT,
+  coverage TEXT,
+  fit TEXT,
+  verdict TEXT,
+  purchase_url TEXT,
+  source_url TEXT,
+  action_label TEXT,
+  recommended INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_trip_options_trip ON trip_options(trip_id, group_key, sort_order);
+
+CREATE TABLE IF NOT EXISTS restaurant_links (
+  restaurant_id TEXT PRIMARY KEY REFERENCES restaurants(id) ON DELETE CASCADE,
+  place_id TEXT NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+  google_maps_url TEXT,
+  menu_url TEXT,
+  image_url TEXT,
+  source_url TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_restaurant_links_place ON restaurant_links(place_id);
+
+CREATE TABLE IF NOT EXISTS meal_slots (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  date TEXT NOT NULL,
+  time TEXT,
+  label TEXT NOT NULL,
+  meal_type TEXT,
+  area TEXT,
+  event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+  selected_restaurant_id TEXT REFERENCES restaurants(id) ON DELETE SET NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_meal_slots_trip ON meal_slots(trip_id, date, sort_order);
+
+CREATE TABLE IF NOT EXISTS meal_slot_options (
+  meal_slot_id TEXT NOT NULL REFERENCES meal_slots(id) ON DELETE CASCADE,
+  restaurant_id TEXT NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(meal_slot_id, restaurant_id)
+);
+
+CREATE TABLE IF NOT EXISTS checklist_packing_links (
+  checklist_id TEXT NOT NULL REFERENCES trip_checklist_items(id) ON DELETE CASCADE,
+  packing_id TEXT NOT NULL REFERENCES packing_items(id) ON DELETE CASCADE,
+  PRIMARY KEY(checklist_id, packing_id)
+);
+
 -- Checkable pre-departure work. Re-running this script intentionally preserves status.
 INSERT INTO trip_checklist_items (id, trip_id, title, category, status, notes, url, sort_order)
 VALUES
@@ -60,7 +121,7 @@ VALUES
 ('plan-task-esim-install', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'eSIM 프로필 한국에서 설치', '통신', 'TODO', 'Wi-Fi에서 설치하고 QR/설정 화면을 오프라인 캡처. 일본 도착 전 데이터 회선 활성화 조건 확인', NULL, 21),
 ('plan-task-vjw', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Visit Japan Web 등록 + QR 캡처', '예약 · 입국', 'TODO', 'Oosu와 Domenic 각각 입국·세관 정보를 등록하고 QR을 오프라인 저장', 'https://www.vjw.digital.go.jp/', 30),
 ('plan-task-insurance', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '여행자보험 확인/가입', '예약 · 입국', 'TODO', '신용카드 해외 의료 보장과 중복 여부를 먼저 확인', 'https://www.japan.travel/en/plan/travel-insurance-in-japan/', 40),
-('plan-task-restaurants', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Kura · Sushiro · CHIBO 예약', '식당 예약', 'TODO', '아래 예약 상태 카드에서 각 식당을 BOOKED로 바꾸기', NULL, 50),
+('plan-task-restaurants', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '식사 후보 선택 + 필요한 식당 예약', '식당 예약', 'TODO', '식사별 후보에서 식당을 선택하고, 선택한 식당이 예약 권장인 경우 BOOKED로 변경', NULL, 50),
 ('plan-task-plug', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '일본 Type-A 돼지코 2개 이상', '준비물', 'TODO', '충전기 입력이 100–240V인지 확인. 일본은 100V', NULL, 60),
 ('plan-task-rain', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '접이식 우산 + 얇은 방수 겉옷', '준비물', 'TODO', '비를 기본 전제로 하되 덥고 습한 9월이라 가벼운 장비 우선', NULL, 61),
 ('plan-task-footcare', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '워킹화 + 물집 밴드', '준비물', 'TODO', '새 신발 금지. 하루 7,000–10,000보 목표', NULL, 62),
@@ -88,7 +149,12 @@ INSERT INTO restaurants (
 ('plan-rest-yamamoto-hamburg', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Yamamoto no Hamburg Shinsaibashi', 'Osaka', '2026-09-16', '11:30', '11:00–22:00, food L.O. 21:30', '약 ¥2,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', NULL, '예약 불가. 점심 러시가 커지기 전 입장.', '기본 함박 중심. 내장·매운 토핑은 피한다.', 70),
 ('plan-rest-daiki-dotonbori', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Daiki Suisan Kaitenzushi Dotonbori', 'Osaka', '2026-09-16', '15:00', '11:00–23:00', '약 ¥2,000–¥4,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in / 혼잡 시 공식 앱·LINE 순번 접수 가능 여부 확인', 'https://www.daiki-suisan.co.jp/shop/kaitenzushi/doutonbori/', '공식 FAQ상 좌석 예약은 받지 않는다. 15시 비혼잡 시간대에 예산 상한을 정해 이용.', 'Domenic은 생선만 선택하고 우니·조개/갑각류 제외. Oosu는 매운 군함/소스 제외.', 80),
 ('plan-rest-ohsho-nipponbashi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Ohsho Nipponbashi', 'Osaka', '2026-09-16', '19:00', '공식: 일–목 11:00–24:00 (L.O. 23:30) / 금·토 11:00–25:00 (L.O. 24:00), 정기휴일 없음', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://www.osaka-ohsho.com/store/detail.php?area=osaka&id=nipponbashi', 'Tabelog의 11:00–22:00·화요일 휴무 표기는 공식 최신 매장 정보와 충돌하므로 공식 정보를 우선.', '교자 + 볶음밥/비매운 면. Oosu는 매운 메뉴 제외, Domenic은 내장 메뉴 제외.', 90),
-('plan-rest-kix-nishiya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Tenma Sushi Nishiya', 'KIX', '2026-09-17', '09:00', '07:00–22:00', '약 ¥1,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://www.kansai-airport.or.jp/en/dine/d091', 'KIX Terminal 1 2F 보안검색 전. 마지막 초밥 후 바로 보안검색/출국심사로 이동.', 'Domenic은 생선 초밥 중심. Oosu는 매운 소스 제외.', 100)
+('plan-rest-kix-nishiya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Tenma Sushi Nishiya', 'KIX', '2026-09-17', '09:00', '07:00–22:00', '약 ¥1,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://www.kansai-airport.or.jp/en/dine/d091', 'KIX Terminal 1 2F 보안검색 전. 마지막 초밥 후 바로 보안검색/출국심사로 이동.', 'Domenic은 생선 초밥 중심. Oosu는 매운 소스 제외.', 100),
+('plan-rest-musashi-sanjo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushi no Musashi Sanjo Honten', 'Kyoto', NULL, NULL, '11:00–21:45, 최종입점 21:20', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://sushinomusashi.com/', 'Sanjo/Kawaramachi 쪽 회전초밥 대안. 예약 불가.', 'Domenic은 참치·연어·흰살 등 생선 위주로 고르고 우니·조개/갑각류 제외. Oosu는 매운 토핑 제외.', 110),
+('plan-rest-sen-no-kaze', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Ramen Sen no Kaze Kyoto', 'Kyoto', NULL, NULL, '11:30–21:00', '약 ¥1,000–¥2,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://ramensennokazekyoto.com/', 'Teramachi/Kawaramachi 저녁 라멘 대안. 줄이 길 수 있어 현장 대기 기준.', 'Domenic은 조개류 알레르기 표기가 있는 Kyo no Shio 계열을 피하고 간장계열 성분을 현장에서 재확인. Oosu는 매운 메뉴 제외.', 120),
+('plan-rest-kura-dotonbori', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Kura Sushi Dotonbori Global Flagship', 'Osaka', NULL, NULL, '화–금 11:00–24:00 / 주말·공휴일 10:20–24:00', '약 ¥1,000–¥3,000/인', 'RESERVE NOW', 'TODO', '공식 웹 좌석예약 / Kura 공식 앱', 'https://shop.kurasushi.co.jp/detail/567', '도톤보리 초밥 후보. 선택하면 공식 웹/앱으로 시간대 예약 권장.', 'Domenic은 생선 중심, 우니·조개/갑각류 제외. Oosu는 매운 소스/고추 토핑 제외.', 130),
+('plan-rest-ajinoya-honten', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Ajinoya Honten', 'Osaka', NULL, NULL, '화–일 11:00–22:00 / 월요일 휴무', '약 ¥1,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://ajinoya-okonomiyaki.mom/ko/', '도톤보리/난바 오코노미야키 대안.', 'Domenic은 해산물 믹스 대신 돼지고기·소고기·치즈 계열 선택. Oosu는 김치/매운 옵션 제외.', 140),
+('plan-rest-fukuyoshi-shinsaibashi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Fukuyoshi Osaka Shinsaibashi', 'Osaka', NULL, NULL, '9/16 수요일 기준 11:00–15:00 영업 확인', '약 ¥1,000–¥3,000/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', NULL, 'Shinsaibashi 점심 함박 대안. 당일 임시휴무 여부 재확인.', '기본 함박/고기 메뉴 위주. 내장·매운 옵션 제외.', 150)
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, name=excluded.name, city=excluded.city,
   planned_date=excluded.planned_date, planned_time=excluded.planned_time,
@@ -97,6 +163,51 @@ ON CONFLICT(id) DO UPDATE SET
   reservation_url=excluded.reservation_url, notes=excluded.notes,
   dietary_notes=excluded.dietary_notes, sort_order=excluded.sort_order,
   updated_at=CURRENT_TIMESTAMP;
+
+-- Restaurants are also shared candidates in Places/Votes. Stable IDs avoid
+-- duplicating the same restaurant between Travel Guide and Candidate Voting.
+INSERT INTO places (id, trip_id, name, category, address, lat, lng, notes, saved_by)
+VALUES
+('plan-place-rest-kura-teramachi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Kura Sushi Kyoto Teramachi', 'restaurant', 'Kyoto Teramachi / Shinkyogoku area', NULL, NULL, '회전초밥 · 예약 가능 · 첫날/교토 점심 후보', 'travel-plan'),
+('plan-place-rest-sushiro-gion', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushiro Kyoto Gion', 'restaurant', 'Gion, Higashiyama Ward, Kyoto', NULL, NULL, '회전초밥 · 앱/LINE 예약 가능 · 9/14 점심 후보', 'travel-plan'),
+('plan-place-rest-musashi-sanjo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushi no Musashi Sanjo Honten', 'restaurant', '440 Ebisucho, Nakagyo Ward, Kyoto', NULL, NULL, '회전초밥 · 예약 불가 · Kawaramachi/Sanjo 후보', 'travel-plan'),
+('plan-place-rest-yucho', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Ramen YUCHO', 'restaurant', '609 Teianmaenocho, Shimogyo Ward, Kyoto', NULL, NULL, '생강 쇼유 라멘 · walk-in', 'travel-plan'),
+('plan-place-rest-sen-no-kaze', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Ramen Sen no Kaze Kyoto', 'restaurant', 'Kawaramachi / Teramachi, Kyoto', NULL, NULL, '라멘 · walk-in · 성분 확인 필요', 'travel-plan'),
+('plan-place-rest-genroku', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Genrokuzushi Dotonbori', 'restaurant', 'Dotonbori, Chuo Ward, Osaka', NULL, NULL, '회전초밥 · walk-in · 도톤보리 점심 후보', 'travel-plan'),
+('plan-place-rest-kura-dotonbori', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Kura Sushi Dotonbori Global Flagship', 'restaurant', '1-4-22 Dotonbori, Chuo Ward, Osaka', NULL, NULL, '회전초밥 · 예약 가능 · 도톤보리 후보', 'travel-plan'),
+('plan-place-rest-daiki', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Daiki Suisan Kaitenzushi Dotonbori', 'restaurant', 'Dotonbori, Chuo Ward, Osaka', NULL, NULL, '회전초밥 · walk-in · 도톤보리 후보', 'travel-plan'),
+('plan-place-rest-rikuro', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Rikuro’s Namba Main Store', 'restaurant', 'Namba, Osaka', NULL, NULL, '치즈케이크 · walk-in / takeout', 'travel-plan'),
+('plan-place-rest-chibo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'CHIBO Dotonbori', 'restaurant', 'Dotonbori, Chuo Ward, Osaka', NULL, NULL, '오코노미야키 · 예약 가능', 'travel-plan'),
+('plan-place-rest-ajinoya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Ajinoya Honten', 'restaurant', 'Namba / Dotonbori, Osaka', NULL, NULL, '오코노미야키 · pork-only 선택 가능', 'travel-plan'),
+('plan-place-rest-yamamoto', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Yamamoto no Hamburg Shinsaibashi', 'restaurant', 'Shinsaibashi, Osaka', NULL, NULL, '함박 · walk-in · 9/16 점심 후보', 'travel-plan'),
+('plan-place-rest-fukuyoshi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Fukuyoshi Osaka Shinsaibashi', 'restaurant', '2-4-23 Higashishinsaibashi, Chuo Ward, Osaka', NULL, NULL, '함박 · 9/16 점심 대안', 'travel-plan'),
+('plan-place-rest-ohsho', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Ohsho Nipponbashi', 'restaurant', 'Nipponbashi, Osaka', NULL, NULL, '교자 · 볶음밥 · 숙소 근처', 'travel-plan'),
+('plan-place-rest-nishiya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Tenma Sushi Nishiya', 'restaurant', 'KIX Terminal 1 2F before security', NULL, NULL, '공항 출국 전 초밥', 'travel-plan')
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, name=excluded.name, category=excluded.category,
+  address=excluded.address, notes=excluded.notes, saved_by=excluded.saved_by;
+
+INSERT INTO restaurant_links (restaurant_id, place_id, google_maps_url, menu_url, image_url, source_url)
+VALUES
+('plan-rest-kura-teramachi', 'plan-place-rest-kura-teramachi', 'https://www.google.com/maps/search/?api=1&query=Kura%20Sushi%20Kyoto%20Teramachi', 'https://shop.kurasushi.co.jp/detail/657', 'https://canlyhp.s3-ap-northeast-1.amazonaws.com/images/2026022669a024b14d0eb京都寺町通_内観.jpg', 'https://shop.kurasushi.co.jp/detail/657'),
+('plan-rest-sushiro-gion', 'plan-place-rest-sushiro-gion', 'https://www.google.com/maps/search/?api=1&query=Sushiro%20Kyoto%20Gion', 'https://www.akindo-sushiro.co.jp/menu/', NULL, 'https://www.akindo-sushiro.co.jp/shop/detail.php?id=2750'),
+('plan-rest-musashi-sanjo', 'plan-place-rest-musashi-sanjo', 'https://www.google.com/maps/search/?api=1&query=Sushi%20no%20Musashi%20Sanjo%20Honten', 'https://tabelog.com/en/kyoto/A2601/A260202/26003605/dtlmenu/', NULL, 'https://tabelog.com/en/kyoto/A2601/A260202/26003605/'),
+('plan-rest-ramen-yucho', 'plan-place-rest-yucho', 'https://www.google.com/maps/search/?api=1&query=Ramen%20YUCHO%20Kyoto', NULL, NULL, 'https://kyoto-shijo.or.jp/shop/ramen-yucho/'),
+('plan-rest-sen-no-kaze', 'plan-place-rest-sen-no-kaze', 'https://www.google.com/maps/search/?api=1&query=Ramen%20Sen%20no%20Kaze%20Kyoto', 'https://ramensennokazekyoto.com/', NULL, 'https://ramensennokazekyoto.com/'),
+('plan-rest-genroku-dotonbori', 'plan-place-rest-genroku', 'https://www.google.com/maps/search/?api=1&query=Genrokuzushi%20Dotonbori', 'https://www.mawaru-genrokuzusi.co.jp/', NULL, 'https://www.mawaru-genrokuzusi.co.jp/'),
+('plan-rest-kura-dotonbori', 'plan-place-rest-kura-dotonbori', 'https://www.google.com/maps/search/?api=1&query=Kura%20Sushi%20Dotonbori%20Global%20Flagship', 'https://shop.kurasushi.co.jp/detail/567', 'https://canlyhp.s3-ap-northeast-1.amazonaws.com/images/2026022769a0fec83baf6道頓堀_内観.jpg', 'https://shop.kurasushi.co.jp/detail/567'),
+('plan-rest-daiki-dotonbori', 'plan-place-rest-daiki', 'https://www.google.com/maps/search/?api=1&query=Daiki%20Suisan%20Kaitenzushi%20Dotonbori', 'https://www.daiki-suisan.co.jp/shop/kaitenzushi/doutonbori/', 'https://www.daiki-suisan.co.jp/img/pict-nav-daiki-suisan-sushi.jpg', 'https://www.daiki-suisan.co.jp/shop/kaitenzushi/doutonbori/'),
+('plan-rest-rikuro-namba', 'plan-place-rest-rikuro', 'https://www.google.com/maps/search/?api=1&query=Rikuro%20Namba%20Main%20Store', 'https://www.rikuro.co.jp/shoplist/134.html', NULL, 'https://www.rikuro.co.jp/shoplist/134.html'),
+('plan-rest-chibo-dotonbori', 'plan-place-rest-chibo', 'https://www.google.com/maps/search/?api=1&query=CHIBO%20Dotonbori', 'https://www.chibo.com/menu/', 'https://www.chibo.com/wp-content/themes/chibo/assets/img/index/index_slide_img01.webp', 'https://www.chibo.com/shop/detail.php?id=4'),
+('plan-rest-ajinoya-honten', 'plan-place-rest-ajinoya', 'https://www.google.com/maps/search/?api=1&query=Ajinoya%20Honten%20Osaka', 'https://tabelog.com/en/osaka/A2701/A270202/27001439/dtlmenu/', 'https://ajinoya-okonomiyaki.mom/img/toppage/slide/2001.jpg', 'https://ajinoya-okonomiyaki.mom/ko/'),
+('plan-rest-yamamoto-hamburg', 'plan-place-rest-yamamoto', 'https://www.google.com/maps/search/?api=1&query=Yamamoto%20no%20Hamburg%20Shinsaibashi', NULL, NULL, 'https://tabelog.com/osaka/A2701/A270201/27156166/'),
+('plan-rest-fukuyoshi-shinsaibashi', 'plan-place-rest-fukuyoshi', 'https://www.google.com/maps/search/?api=1&query=Fukuyoshi%20Osaka%20Shinsaibashi', NULL, NULL, NULL),
+('plan-rest-ohsho-nipponbashi', 'plan-place-rest-ohsho', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Ohsho%20Nipponbashi', 'https://www.osaka-ohsho.com/menu/', 'https://www.osaka-ohsho.com/assets/images/common/bnr_gyoza-biz.jpg', 'https://www.osaka-ohsho.com/store/detail.php?area=osaka&id=nipponbashi'),
+('plan-rest-kix-nishiya', 'plan-place-rest-nishiya', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Tenma%20Sushi%20Nishiya%20Kansai%20Airport', 'https://www.kansai-airport.or.jp/en/dine/d091', NULL, 'https://www.kansai-airport.or.jp/en/dine/d091')
+ON CONFLICT(restaurant_id) DO UPDATE SET
+  place_id=excluded.place_id, google_maps_url=excluded.google_maps_url,
+  menu_url=excluded.menu_url, image_url=COALESCE(excluded.image_url, restaurant_links.image_url),
+  source_url=excluded.source_url, updated_at=CURRENT_TIMESTAMP;
 
 -- Rules and quick-reference guides.
 INSERT INTO trip_guides (id, trip_id, section, title, subtitle, details, sort_order)
@@ -116,6 +227,34 @@ ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, section=excluded.section, title=excluded.title,
   subtitle=excluded.subtitle, details=excluded.details, sort_order=excluded.sort_order,
   updated_at=CURRENT_TIMESTAMP;
+
+-- Decision tables shown in Travel Guide. Prices are current reference prices;
+-- purchase pages remain the final source for dynamic reseller checkout totals.
+INSERT INTO trip_options (
+  id, trip_id, group_key, group_title, name, price, coverage, fit, verdict,
+  purchase_url, source_url, action_label, recommended, sort_order
+) VALUES
+('opt-kyoto-icoca', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'kyoto_transport', '교토 교통', 'ICOCA / 교통계 IC · 종량제', '버스 ¥230 + 철도 실사용 운임', '교토 시버스·지하철·Keihan 등 호환 교통을 탈 때마다 결제', '9/13 버스 1회 + 9/14 소수 버스 + 9/15 Keihan이라 가장 단순', '이번 일정 기본 추천. 패스 회수하려고 불필요하게 타지 않아도 됨', 'https://www.westjr.co.jp/global/en/howto/icoca/', 'https://www.westjr.co.jp/global/en/howto/icoca/', 'ICOCA 안내', 1, 10),
+('opt-kyoto-city-pass', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'kyoto_transport', '교토 교통', 'Kyoto Subway & Bus 1-Day Pass · 공식', '¥1,100 / 성인 1일', '교토 시영지하철 전선 + 시버스 전선 + 일부 Kyoto Bus·Keihan Bus·JR Bus', '하루에 버스/지하철을 많이 타는 날만 유리. 9/15 Keihan Railway 본선은 별도', '9/14 우천으로 이동 횟수가 크게 늘어날 때 현지 구매 검토', 'https://www2.city.kyoto.lg.jp/kotsu/webguide/en/ticket/regular_1day_card_comm.html', 'https://www2.city.kyoto.lg.jp/kotsu/webguide/en/ticket/regular_1day_card_comm.html', '공식 정보', 0, 20),
+('opt-kyoto-klook-pass', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'kyoto_transport', '교토 교통', 'Klook · Kyoto Subway & Bus 1-Day', '₩11,100 / 성인', '공식 Subway & Bus 1-Day Pass와 같은 1일 무제한형 상품', '원화 선결제 가능하지만 교토에서 교환 불가. KIX T1 Limon Welcome Desk에서 실물 교환 필요', '공식 ¥1,100과 실결제가 비교. KIX에서 교환할 의향이 있을 때만', 'https://www.klook.com/ko/activity/118071-kyoto-city-subway-and-bus-ticket/', 'https://www.klook.com/ko/activity/118071-kyoto-city-subway-and-bus-ticket/', 'Klook 구매', 0, 30),
+('opt-kyoto-keihan', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'kyoto_transport', '교토 교통', 'Keihan Kyoto Sightseeing Pass', '¥1,100 1일 / ¥1,300 24시간', 'Keihan 지정 구간 무제한', 'Fushimi Inari 왕복 위주인 현재 일정에는 회수 어려움', 'Keihan을 같은 날 여러 번 더 탈 때만 가치 있음', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', 'Keihan 구매', 0, 40),
+('opt-kyoto-keihan-osaka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'kyoto_transport', '교토 교통', 'Keihan Kyoto-Osaka Sightseeing Pass', '¥1,650 1일 / ¥1,850 24시간', 'Keihan 교토↔오사카 지정 구간 무제한', '9/15 교토→오사카 편도만 쓰기에는 과함', '현재는 종량제가 낫고 일정 변경으로 Keihan 왕복이 생길 때만', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', 'Keihan 구매', 0, 50),
+
+('opt-osaka-card-tap', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', '신용카드 Tap / ICOCA · 종량제', '실사용 운임', 'Osaka Metro는 contactless 카드 지원. Nankai는 대응 개찰기에서 contactless 지원', '오사카 일정의 유료 이동 횟수가 많지 않아 가장 편함', '이번 일정 기본 추천. 교토까지 하나로 통일하려면 ICOCA가 더 편함', 'https://subway.osakametro.co.jp/guide/page/contactless_payment.php', 'https://subway.osakametro.co.jp/guide/page/contactless_payment.php', 'Osaka Metro 안내', 1, 10),
+('opt-osaka-eco', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', 'Enjoy Eco Card', '평일 ¥820 / 토·일·공휴일 ¥620', 'Osaka Metro + Osaka City Bus 1일 무제한', '9/16은 수요일이라 ¥820. Osaka Castle 왕복 + 시내 여러 번 이동하면 비교할 가치', '당일 Metro 탑승을 4회 안팎 할 때 현지 구매 검토', 'https://subway.osakametro.co.jp/guide/page/enjoy-eco.php', 'https://subway.osakametro.co.jp/guide/page/enjoy-eco.php', '공식 정보', 0, 20),
+('opt-osaka-klook', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', 'Klook · Osaka Metro + City Bus 1-Day QR', '₩8,900 / 성인', 'Osaka Metro + City Bus 1일 QR 패스', '원화 결제·QR 편의성. 공식 Enjoy Eco 평일 ¥820과 실결제가 비교 필요', '가격이 공식 ¥820보다 유리할 때만', 'https://www.klook.com/ko/activity/11515-osaka-metro-pass/', 'https://www.klook.com/ko/activity/11515-osaka-metro-pass/', 'Klook 구매', 0, 30),
+('opt-osaka-amazing', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', 'Osaka Amazing Pass', '¥3,500 / 1일', 'Osaka Metro 계열 교통 + 약 40개 관광시설', 'Osaka Castle 외 유료 명소를 많이 넣지 않는 현재 일정에는 과함', '관광지 수를 늘리지 않는 원칙 때문에 비추천', 'https://osaka-amazing-pass.com/en/howto_about_1day.html', 'https://osaka-amazing-pass.com/en/howto_about_1day.html', '공식 구매', 0, 40),
+('opt-osaka-keihan-metro', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', 'Keihan + Osaka Metro 1-Day', '¥2,160', 'Keihan 지정 구간 + Osaka Metro 1일', '9/15 편도 Keihan + 짧은 Metro만 쓰므로 회수 어려움', '현재 일정에서는 종량제 유지', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', '공식 정보', 0, 50),
+
+('opt-esim-nomad', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Nomad Japan 5GB', 'US$10 / 30일', 'KDDI au + SoftBank · hotspot 가능 · 60일 내 활성화', '5일 여행에 5GB면 지도·번역·MyTrip 사용에 충분', '가격/망/설치 편의 균형이 좋아 기본 추천', 'https://www.nomadesim.com/japan-eSIM/5gb-30day', 'https://www.nomadesim.com/japan-eSIM/5gb-30day', 'Nomad 구매', 1, 10),
+('opt-esim-ubigi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Ubigi Japan 5GB', '¥1,700 / 15일', 'KDDI + NTT Docomo · Smartstart · tethering 가능', '일본 통신사 조합이 좋고 15일이면 충분', '엔화 가격이 Nomad보다 매력적이면 선택', 'https://cellulardata.ubigi.com/ko/rates-and-coverage/japan-esim-data-plans/%EC%9D%BC%EB%B3%B8-5-gb-15%EC%9D%BC/', 'https://cellulardata.ubigi.com/ko/rates-and-coverage/japan-esim-data-plans/%EC%9D%BC%EB%B3%B8-5-gb-15%EC%9D%BC/', 'Ubigi 구매', 0, 20),
+('opt-esim-saily', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Saily Japan 5GB', 'US$10.99 / 30일', 'KDDI·SoftBank 등 · 4G/5G · hotspot 가능', '기능은 충분하지만 현재 공개가는 Nomad보다 약간 높음', '앱/보안기능 선호 시 대안', 'https://saily.com/ko/esim-japan/', 'https://saily.com/ko/esim-japan/', 'Saily 구매', 0, 30)
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, group_key=excluded.group_key, group_title=excluded.group_title,
+  name=excluded.name, price=excluded.price, coverage=excluded.coverage, fit=excluded.fit,
+  verdict=excluded.verdict, purchase_url=excluded.purchase_url, source_url=excluded.source_url,
+  action_label=excluded.action_label, recommended=excluded.recommended,
+  sort_order=excluded.sort_order, updated_at=CURRENT_TIMESTAMP;
 
 -- Planned itinerary. Booking-sourced rows are never deleted or overwritten.
 INSERT INTO events (id, trip_id, title, kind, date, start_time, end_time, location, address, lat, lng, notes, source, sort_order, meta_json)
@@ -181,6 +320,64 @@ ON CONFLICT(id) DO UPDATE SET
   source=excluded.source, sort_order=excluded.sort_order, meta_json=excluded.meta_json,
   updated_at=CURRENT_TIMESTAMP;
 
+-- Meal slots turn one hard-coded restaurant into a selectable 2–3 option pool.
+-- Existing selections are preserved when this script is re-run.
+INSERT INTO meal_slots (id, trip_id, date, time, label, meal_type, area, event_id, selected_restaurant_id, sort_order)
+VALUES
+('meal-0913-first-sushi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-13', '16:30', '도착일 첫 초밥', 'late lunch / early dinner', 'Kawaramachi · Teramachi', 'plan-event-0913-kura', 'plan-rest-kura-teramachi', 10),
+('meal-0914-lunch-sushi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-14', '11:15', '교토 점심 · 초밥', 'lunch', 'Gion · Kawaramachi', 'plan-event-0914-sushiro', 'plan-rest-sushiro-gion', 20),
+('meal-0914-dinner-ramen', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-14', '18:15', '교토 저녁 · 라멘', 'dinner', 'Kawaramachi · 호텔 근처', 'plan-event-0914-yucho', 'plan-rest-ramen-yucho', 30),
+('meal-0915-lunch-sushi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '14:00', '오사카 첫 점심 · 초밥', 'late lunch', 'Dotonbori', 'plan-event-0915-genroku', 'plan-rest-genroku-dotonbori', 40),
+('meal-0915-snack-rikuro', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '16:00', '오후 디저트', 'snack', 'Namba', 'plan-event-0915-rikuro', 'plan-rest-rikuro-namba', 50),
+('meal-0915-dinner-okonomiyaki', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-15', '18:30', '도톤보리 저녁 · 오코노미야키', 'dinner', 'Dotonbori · Namba', 'plan-event-0915-chibo', 'plan-rest-chibo-dotonbori', 60),
+('meal-0916-lunch-hamburg', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-16', '11:30', '신사이바시 점심 · 함박', 'lunch', 'Shinsaibashi', 'plan-event-0916-hamburg', 'plan-rest-yamamoto-hamburg', 70),
+('meal-0916-afternoon-sushi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-16', '15:00', '오후 초밥', 'late lunch / snack', 'Dotonbori', 'plan-event-0916-daiki', 'plan-rest-daiki-dotonbori', 80),
+('meal-0916-dinner-gyoza', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-16', '19:00', '마지막 밤 저녁 · 교자', 'dinner', 'Nipponbashi', 'plan-event-0916-ohsho', 'plan-rest-ohsho-nipponbashi', 90),
+('meal-0917-airport-sushi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '2026-09-17', '09:00', 'KIX 출국 전 마지막 초밥', 'breakfast', 'KIX T1 before security', 'plan-event-0917-nishiya', 'plan-rest-kix-nishiya', 100)
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, date=excluded.date, time=excluded.time, label=excluded.label,
+  meal_type=excluded.meal_type, area=excluded.area, event_id=excluded.event_id,
+  selected_restaurant_id=COALESCE(meal_slots.selected_restaurant_id, excluded.selected_restaurant_id),
+  sort_order=excluded.sort_order, updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO meal_slot_options (meal_slot_id, restaurant_id, sort_order)
+VALUES
+('meal-0913-first-sushi', 'plan-rest-kura-teramachi', 10),
+('meal-0913-first-sushi', 'plan-rest-musashi-sanjo', 20),
+('meal-0913-first-sushi', 'plan-rest-sushiro-gion', 30),
+('meal-0914-lunch-sushi', 'plan-rest-sushiro-gion', 10),
+('meal-0914-lunch-sushi', 'plan-rest-musashi-sanjo', 20),
+('meal-0914-lunch-sushi', 'plan-rest-kura-teramachi', 30),
+('meal-0914-dinner-ramen', 'plan-rest-ramen-yucho', 10),
+('meal-0914-dinner-ramen', 'plan-rest-sen-no-kaze', 20),
+('meal-0915-lunch-sushi', 'plan-rest-genroku-dotonbori', 10),
+('meal-0915-lunch-sushi', 'plan-rest-kura-dotonbori', 20),
+('meal-0915-lunch-sushi', 'plan-rest-daiki-dotonbori', 30),
+('meal-0915-snack-rikuro', 'plan-rest-rikuro-namba', 10),
+('meal-0915-dinner-okonomiyaki', 'plan-rest-chibo-dotonbori', 10),
+('meal-0915-dinner-okonomiyaki', 'plan-rest-ajinoya-honten', 20),
+('meal-0916-lunch-hamburg', 'plan-rest-yamamoto-hamburg', 10),
+('meal-0916-lunch-hamburg', 'plan-rest-fukuyoshi-shinsaibashi', 20),
+('meal-0916-afternoon-sushi', 'plan-rest-daiki-dotonbori', 10),
+('meal-0916-afternoon-sushi', 'plan-rest-genroku-dotonbori', 20),
+('meal-0916-afternoon-sushi', 'plan-rest-kura-dotonbori', 30),
+('meal-0916-dinner-gyoza', 'plan-rest-ohsho-nipponbashi', 10),
+('meal-0917-airport-sushi', 'plan-rest-kix-nishiya', 10)
+ON CONFLICT(meal_slot_id, restaurant_id) DO UPDATE SET sort_order=excluded.sort_order;
+
+-- If a traveler has already changed a meal choice, restore that chosen restaurant
+-- onto the linked schedule event after the baseline event upsert above.
+UPDATE events
+SET
+  title = (SELECT r.name FROM meal_slots ms JOIN restaurants r ON r.id = ms.selected_restaurant_id WHERE ms.event_id = events.id),
+  location = (SELECT r.name FROM meal_slots ms JOIN restaurants r ON r.id = ms.selected_restaurant_id WHERE ms.event_id = events.id),
+  address = (SELECT p.address FROM meal_slots ms JOIN restaurant_links rl ON rl.restaurant_id = ms.selected_restaurant_id JOIN places p ON p.id = rl.place_id WHERE ms.event_id = events.id),
+  lat = (SELECT p.lat FROM meal_slots ms JOIN restaurant_links rl ON rl.restaurant_id = ms.selected_restaurant_id JOIN places p ON p.id = rl.place_id WHERE ms.event_id = events.id),
+  lng = (SELECT p.lng FROM meal_slots ms JOIN restaurant_links rl ON rl.restaurant_id = ms.selected_restaurant_id JOIN places p ON p.id = rl.place_id WHERE ms.event_id = events.id),
+  notes = (SELECT TRIM(COALESCE(r.notes,'') || CASE WHEN r.dietary_notes IS NOT NULL THEN ' · ' || r.dietary_notes ELSE '' END) FROM meal_slots ms JOIN restaurants r ON r.id = ms.selected_restaurant_id WHERE ms.event_id = events.id),
+  updated_at = CURRENT_TIMESTAMP
+WHERE id IN (SELECT event_id FROM meal_slots WHERE selected_restaurant_id IS NOT NULL AND event_id IS NOT NULL);
+
 -- Packing/preparation items missing from the generic template. Use only columns
 -- that exist in the oldest production schema; app startup adds richer columns.
 -- Preserve checked state on re-run.
@@ -190,10 +387,46 @@ VALUES
 ('plan-pack-rain-shell', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '얇은 방수 겉옷', '의류 · 신발', '공용', 0, '비를 전제로 하되 9월 더위 때문에 가벼운 레이어 우선'),
 ('plan-pack-blister', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '물집 밴드 / 발 관리 키트', '건강', '공용', 0, '하루 7,000–10,000보 대비'),
 ('plan-pack-waterproof-pouch', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '작은 방수 지퍼 파우치', '생활', '공용', 0, '여권·영수증·전자기기를 폭우에서 보호'),
+('plan-pack-tattoo-leg-cover', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '타투 가림용 발토시', '생활', 'Oosu', 0, 'AMANEK 대욕장 이용용. 한국에서 미리 구입'),
 ('plan-pack-sony-mirrorless', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sony 미러리스 카메라', '전자기기', 'Oosu', 0, '카메라 본체 + 배터리/메모리카드/충전 확인'),
 ('plan-pack-neck-pillow', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '목베개', '생활', '공용', 0, '왕복 항공 이동 및 공항 대기용')
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, label=excluded.label, category=excluded.category,
   owner=excluded.owner, reason=excluded.reason;
+
+-- Link departure preparation and the bag checklist. Toggling either screen will
+-- update the same underlying completion state through the API.
+INSERT OR IGNORE INTO checklist_packing_links (checklist_id, packing_id) VALUES
+('plan-task-plug', 'plan-pack-type-a'),
+('plan-task-rain', 'plan-pack-rain-shell'),
+('plan-task-footcare', 'plan-pack-blister'),
+('plan-task-tattoo-leg-cover', 'plan-pack-tattoo-leg-cover');
+
+INSERT OR IGNORE INTO checklist_packing_links (checklist_id, packing_id)
+SELECT 'plan-task-rain', id FROM packing_items
+WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND label='접이식 우산';
+
+INSERT OR IGNORE INTO checklist_packing_links (checklist_id, packing_id)
+SELECT 'plan-task-power', id FROM packing_items
+WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND label IN ('보조배터리','휴대폰 충전기');
+
+-- Initial synchronization for linked preparation states and selected meal slots.
+UPDATE trip_checklist_items
+SET status = CASE WHEN NOT EXISTS (
+  SELECT 1 FROM checklist_packing_links cpl JOIN packing_items p ON p.id=cpl.packing_id
+  WHERE cpl.checklist_id=trip_checklist_items.id AND p.checked=0
+) THEN 'DONE' ELSE 'TODO' END,
+updated_at=CURRENT_TIMESTAMP
+WHERE id IN (SELECT DISTINCT checklist_id FROM checklist_packing_links);
+
+UPDATE trip_checklist_items
+SET status = CASE WHEN EXISTS (
+  SELECT 1 FROM meal_slots ms LEFT JOIN restaurants r ON r.id=ms.selected_restaurant_id
+  WHERE ms.trip_id=trip_checklist_items.trip_id AND (
+    ms.selected_restaurant_id IS NULL OR (r.reservation_action='RESERVE NOW' AND r.reservation_status!='BOOKED')
+  )
+) THEN 'TODO' ELSE 'DONE' END,
+updated_at=CURRENT_TIMESTAMP
+WHERE id='plan-task-restaurants';
 
 COMMIT;

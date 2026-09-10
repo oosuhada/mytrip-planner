@@ -215,6 +215,7 @@ app.patch('/api/packing/:id', (req, res) => {
   if (!updates.length) return res.json({ ok: true });
   const normalized = updates.map(([key, value]) => [key, key === 'checked' ? (value ? 1 : 0) : value] as const);
   db.prepare(`UPDATE packing_items SET ${normalized.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ?`).run(...normalized.map(([, value]) => value), req.params.id);
+  syncPackingChecklist(item.trip_id);
   emitTrip(item.trip_id);
   res.json({ ok: true });
 });
@@ -263,14 +264,20 @@ app.patch('/api/checklist/:id', (req, res) => {
   const item = db.prepare('SELECT trip_id FROM trip_checklist_items WHERE id = ?').get(req.params.id) as any;
   if (!item) return res.status(404).json({ error: 'Checklist item not found' });
   if (req.params.id === 'plan-task-restaurants') {
-    const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(item.trip_id) as any;
-    const derived = Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO';
-    db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(derived, req.params.id);
+    const derived = deriveRestaurantChecklist(item.trip_id);
     emitTrip(item.trip_id);
     return res.json({ ok: true, status: derived, derived: true });
   }
   const status = req.body.status === 'DONE' ? 'DONE' : 'TODO';
-  db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  const linkedPacking = db.prepare('SELECT packing_id FROM checklist_packing_links WHERE checklist_id = ?').all(req.params.id) as any[];
+  const transaction = db.transaction(() => {
+    db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+    if (linkedPacking.length) {
+      const stmt = db.prepare('UPDATE packing_items SET checked = ? WHERE id = ?');
+      for (const link of linkedPacking) stmt.run(status === 'DONE' ? 1 : 0, link.packing_id);
+    }
+  });
+  transaction();
   emitTrip(item.trip_id);
   res.json({ ok: true });
 });
@@ -283,12 +290,69 @@ app.patch('/api/restaurants/:id', (req, res) => {
     ? 'WALK-IN'
     : requested === 'BOOKED' ? 'BOOKED' : 'TODO';
   db.prepare('UPDATE restaurants SET reservation_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
-  const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(restaurant.trip_id) as any;
-  db.prepare(`UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'plan-task-restaurants' AND trip_id = ?`)
-    .run(Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO', restaurant.trip_id);
+  deriveRestaurantChecklist(restaurant.trip_id);
   emitTrip(restaurant.trip_id);
   res.json({ ok: true });
 });
+
+app.patch('/api/meal-slots/:id/select', (req, res) => {
+  const slot = db.prepare('SELECT * FROM meal_slots WHERE id = ?').get(req.params.id) as any;
+  if (!slot) return res.status(404).json({ error: 'Meal slot not found' });
+  const restaurantId = String(req.body.restaurant_id || '');
+  const valid = db.prepare('SELECT 1 FROM meal_slot_options WHERE meal_slot_id = ? AND restaurant_id = ?').get(req.params.id, restaurantId);
+  if (!valid) return res.status(400).json({ error: 'Restaurant is not an option for this meal slot' });
+  const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurantId) as any;
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const linked = db.prepare(`
+    SELECT rl.*, p.address, p.lat, p.lng FROM restaurant_links rl
+    JOIN places p ON p.id = rl.place_id WHERE rl.restaurant_id = ?
+  `).get(restaurantId) as any;
+  const transaction = db.transaction(() => {
+    db.prepare('UPDATE meal_slots SET selected_restaurant_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(restaurantId, req.params.id);
+    if (slot.event_id) {
+      db.prepare(`UPDATE events SET title = ?, location = ?, address = ?, lat = ?, lng = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(restaurant.name, restaurant.name, linked?.address || null, linked?.lat ?? null, linked?.lng ?? null,
+          [restaurant.notes, restaurant.dietary_notes].filter(Boolean).join(' · '), slot.event_id);
+    }
+    deriveRestaurantChecklist(slot.trip_id);
+  });
+  transaction();
+  emitTrip(slot.trip_id);
+  res.json({ ok: true, selected_restaurant_id: restaurantId });
+});
+
+function deriveRestaurantChecklist(tripId: string) {
+  const pending = db.prepare(`
+    SELECT COUNT(*) AS n FROM meal_slots ms
+    LEFT JOIN restaurants r ON r.id = ms.selected_restaurant_id
+    WHERE ms.trip_id = ? AND (
+      ms.selected_restaurant_id IS NULL OR
+      (r.reservation_action = 'RESERVE NOW' AND r.reservation_status != 'BOOKED')
+    )
+  `).get(tripId) as any;
+  const status = Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO';
+  db.prepare(`UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'plan-task-restaurants' AND trip_id = ?`)
+    .run(status, tripId);
+  return status;
+}
+
+function syncPackingChecklist(tripId: string) {
+  const checklistIds = db.prepare(`
+    SELECT DISTINCT cpl.checklist_id FROM checklist_packing_links cpl
+    JOIN trip_checklist_items c ON c.id = cpl.checklist_id WHERE c.trip_id = ?
+  `).all(tripId) as any[];
+  const countStmt = db.prepare(`
+    SELECT COUNT(*) AS total, SUM(CASE WHEN p.checked = 1 THEN 1 ELSE 0 END) AS checked
+    FROM checklist_packing_links cpl JOIN packing_items p ON p.id = cpl.packing_id
+    WHERE cpl.checklist_id = ?
+  `);
+  const updateStmt = db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+  for (const row of checklistIds) {
+    const counts = countStmt.get(row.checklist_id) as any;
+    const done = Number(counts?.total || 0) > 0 && Number(counts?.total || 0) === Number(counts?.checked || 0);
+    updateStmt.run(done ? 'DONE' : 'TODO', row.checklist_id);
+  }
+}
 
 async function geocodeOne(q: string) {
   try {
