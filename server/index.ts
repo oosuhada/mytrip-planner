@@ -65,6 +65,7 @@ app.post('/api/trips/:id/events', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: 'Event not found' });
+  if (existing.source === 'booking') return res.status(409).json({ error: 'Confirmed booking events are read-only' });
   const allowed = ['title', 'kind', 'date', 'start_time', 'end_time', 'location', 'address', 'lat', 'lng', 'notes', 'sort_order'];
   const updates = Object.entries(req.body).filter(([key]) => allowed.includes(key));
   if (!updates.length) return res.json({ ok: true });
@@ -75,8 +76,9 @@ app.patch('/api/events/:id', async (req, res) => {
 });
 
 app.delete('/api/events/:id', (req, res) => {
-  const existing = db.prepare('SELECT trip_id FROM events WHERE id = ?').get(req.params.id) as any;
+  const existing = db.prepare('SELECT trip_id, source FROM events WHERE id = ?').get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: 'Event not found' });
+  if (existing.source === 'booking') return res.status(409).json({ error: 'Confirmed booking events cannot be deleted' });
   db.prepare('DELETE FROM events WHERE id = ?').run(req.params.id);
   emitTrip(existing.trip_id);
   res.json({ ok: true });
@@ -262,6 +264,13 @@ app.patch('/api/packing/bags/:id', (req, res) => {
 app.patch('/api/checklist/:id', (req, res) => {
   const item = db.prepare('SELECT trip_id FROM trip_checklist_items WHERE id = ?').get(req.params.id) as any;
   if (!item) return res.status(404).json({ error: 'Checklist item not found' });
+  if (req.params.id === 'plan-task-restaurants') {
+    const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(item.trip_id) as any;
+    const derived = Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO';
+    db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(derived, req.params.id);
+    emitTrip(item.trip_id);
+    return res.json({ ok: true, status: derived, derived: true });
+  }
   const status = req.body.status === 'DONE' ? 'DONE' : 'TODO';
   db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
   emitTrip(item.trip_id);
@@ -276,6 +285,9 @@ app.patch('/api/restaurants/:id', (req, res) => {
     ? 'WALK-IN'
     : requested === 'BOOKED' ? 'BOOKED' : 'TODO';
   db.prepare('UPDATE restaurants SET reservation_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(restaurant.trip_id) as any;
+  db.prepare(`UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'plan-task-restaurants' AND trip_id = ?`)
+    .run(Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO', restaurant.trip_id);
   emitTrip(restaurant.trip_id);
   res.json({ ok: true });
 });

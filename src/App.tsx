@@ -3,8 +3,8 @@ import { DndContext, DragEndEvent, PointerSensor, useDraggable, useDroppable, us
 import { io } from 'socket.io-client';
 import maplibregl, { Marker } from 'maplibre-gl';
 import {
-  ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, GripVertical,
-  ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
+  ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, Copy, ExternalLink, GripVertical,
+  ClipboardCheck, Heart, Hotel, Import, Lock, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
   Plus, Printer, Route, Search, Send, Sparkles, Trash2, Users, Utensils, Vote, X,
 } from 'lucide-react';
 import { api, del, patch, post } from './api';
@@ -95,6 +95,7 @@ type Tab = 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 function TripPage({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tab, setTab] = useState<Tab>('guide');
+  const initialTabResolved = useRef(false);
   const [weather, setWeather] = useState<WeatherDay[]>([]);
   const [plannerName, setPlannerName] = useState(() => {
     const stored = localStorage.getItem('mytrip-name');
@@ -118,6 +119,13 @@ function TripPage({ tripId }: { tripId: string }) {
     api<{ daily: WeatherDay[] }>(`/api/weather?lat=${lat}&lng=${lng}&start=${trip.start_date}&end=${trip.end_date}`)
       .then((x) => setWeather(x.daily)).catch(() => setWeather([]));
   }, [trip?.id, trip?.start_date, trip?.end_date]);
+
+  useEffect(() => {
+    if (!trip || initialTabResolved.current) return;
+    initialTabResolved.current = true;
+    const today = todayInTimeZone('Asia/Tokyo');
+    if (today >= trip.start_date && today <= trip.end_date) setTab('schedule');
+  }, [trip?.id]);
 
   function updateName(value: string) { setPlannerName(value); localStorage.setItem('mytrip-name', value); }
   if (!trip) return <div className="loading"><div className="brand-mark">M</div><span>여행을 불러오는 중…</span></div>;
@@ -190,12 +198,12 @@ function TripGuidePanel({ trip, reload }: { trip: Trip; reload: () => void }) {
     <div className="guide-columns">
       <section className="guide-section before-departure">
         <div className="guide-section-head"><div><ClipboardCheck/><span><p className="eyebrow">BEFORE DEPARTURE</p><h3>출발 전 체크</h3></span></div><b>{done}/{trip.checklist.length}</b></div>
-        <div className="guide-check-groups">{Object.entries(checklistGroups).map(([category, items]) => <div key={category} className="guide-check-group"><h4>{category}</h4>{items.map((item) => <button key={item.id} className={`guide-check ${item.status === 'DONE' ? 'done' : ''}`} onClick={() => toggleChecklist(item.id, item.status)}><span className="check-ui">{item.status === 'DONE' ? <Check size={14}/> : null}</span><span><strong>{item.title}</strong>{item.notes && <small>{item.notes}</small>}</span></button>)}</div>)}</div>
+        <div className="guide-check-groups">{Object.entries(checklistGroups).map(([category, items]) => <div key={category} className="guide-check-group"><h4>{category}</h4>{items.map((item) => <article key={item.id} className={`guide-check ${item.status === 'DONE' ? 'done' : ''}`}><button className="guide-check-main" onClick={() => toggleChecklist(item.id, item.status)} disabled={item.id === 'plan-task-restaurants'}><span className="check-ui">{item.status === 'DONE' ? <Check size={14}/> : null}</span><span><strong>{item.title}</strong>{item.notes && <small>{item.notes}</small>}{item.id === 'plan-task-restaurants' && <em>식당 3곳의 BOOKED 상태와 자동 연동</em>}</span></button>{item.url && <a className="guide-link" href={item.url} target="_blank" rel="noreferrer"><ExternalLink size={12}/> 공식 열기</a>}</article>)}</div>)}</div>
       </section>
 
       <section className="guide-section reservations">
         <div className="guide-section-head"><div><Utensils/><span><p className="eyebrow">RESERVATION STATUS</p><h3>식당 예약</h3></span></div></div>
-        <div className="reservation-list">{trip.restaurants.map((restaurant) => <article key={restaurant.id} className="reservation-row"><div><strong>{restaurant.name}</strong><small>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : restaurant.city}</small></div>{restaurant.reservation_action === 'WALK-IN ONLY' ? <span className="status-pill walkin">WALK-IN</span> : <button className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'todo'}`} onClick={() => toggleReservation(restaurant.id, restaurant.reservation_status)}>{restaurant.reservation_status}</button>}</article>)}</div>
+        <div className="reservation-list">{trip.restaurants.map((restaurant) => <article key={restaurant.id} className="reservation-row"><div><strong>{restaurant.name}</strong><small>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : restaurant.city}</small></div><div className="reservation-actions">{restaurant.reservation_url && <a className="icon-link" href={restaurant.reservation_url} target="_blank" rel="noreferrer" aria-label={`${restaurant.name} 공식 페이지`}><ExternalLink size={12}/></a>}{restaurant.reservation_action === 'WALK-IN ONLY' ? <span className="status-pill walkin">WALK-IN</span> : <button className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'todo'}`} onClick={() => toggleReservation(restaurant.id, restaurant.reservation_status)}>{restaurant.reservation_status}</button>}</div></article>)}</div>
       </section>
     </div>
 
@@ -208,7 +216,7 @@ function TripGuidePanel({ trip, reload }: { trip: Trip; reload: () => void }) {
 
     <section className="guide-section restaurant-section">
       <div className="guide-section-head"><div><Utensils/><span><p className="eyebrow">RESTAURANTS</p><h3>식당 정보</h3></span></div></div>
-      <div className="restaurant-grid">{trip.restaurants.map((restaurant) => <article key={restaurant.id} className="restaurant-card"><header><div><span>{restaurant.city}</span><h4>{restaurant.name}</h4></div><span className={`status-pill ${restaurant.reservation_action === 'WALK-IN ONLY' ? 'walkin' : restaurant.reservation_status === 'BOOKED' ? 'booked' : 'todo'}`}>{restaurant.reservation_action === 'WALK-IN ONLY' ? 'WALK-IN' : restaurant.reservation_status}</span></header><dl><div><dt>예정</dt><dd>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : '예비'}</dd></div><div><dt>영업</dt><dd>{restaurant.hours || '현장 재확인'}</dd></div><div><dt>예산</dt><dd>{restaurant.price_range || '—'}</dd></div><div><dt>예약</dt><dd>{restaurant.reservation_action}</dd></div><div><dt>채널</dt><dd>{restaurant.reservation_channel || 'walk-in'}</dd></div></dl>{restaurant.notes && <p>{restaurant.notes}</p>}{restaurant.dietary_notes && <div className="diet-note">{restaurant.dietary_notes}</div>}</article>)}</div>
+      <div className="restaurant-grid">{trip.restaurants.map((restaurant) => <article key={restaurant.id} className="restaurant-card"><header><div><span>{restaurant.city}</span><h4>{restaurant.name}</h4></div><span className={`status-pill ${restaurant.reservation_action === 'WALK-IN ONLY' ? 'walkin' : restaurant.reservation_status === 'BOOKED' ? 'booked' : 'todo'}`}>{restaurant.reservation_action === 'WALK-IN ONLY' ? 'WALK-IN' : restaurant.reservation_status}</span></header><dl><div><dt>예정</dt><dd>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : '예비'}</dd></div><div><dt>영업</dt><dd>{restaurant.hours || '현장 재확인'}</dd></div><div><dt>예산</dt><dd>{restaurant.price_range || '—'}</dd></div><div><dt>예약</dt><dd>{restaurant.reservation_action}</dd></div><div><dt>채널</dt><dd>{restaurant.reservation_channel || 'walk-in'}</dd></div></dl>{restaurant.notes && <p>{restaurant.notes}</p>}{restaurant.dietary_notes && <div className="diet-note">{restaurant.dietary_notes}</div>}{restaurant.reservation_url && <a className="restaurant-link" href={restaurant.reservation_url} target="_blank" rel="noreferrer"><ExternalLink size={12}/>{restaurant.reservation_action === 'WALK-IN ONLY' ? '공식 정보' : '공식 예약 페이지'}</a>}</article>)}</div>
     </section>
   </div>;
 }
@@ -232,6 +240,14 @@ function TripHeader({ trip, weather, onAdd }: { trip: Trip; weather: WeatherDay[
 
 function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
   const days = dateRange(trip.start_date, trip.end_date);
+  const today = todayInTimeZone('Asia/Tokyo');
+  const tripIsActive = today >= trip.start_date && today <= trip.end_date;
+  const displayDays = tripIsActive ? [...days.filter((date) => date >= today), ...days.filter((date) => date < today)] : days;
+  const todayEvents = trip.events.filter((event) => event.date === today).sort((a, b) => (a.start_time || '99:99').localeCompare(b.start_time || '99:99'));
+  const nowTime = timeInTimeZone('Asia/Tokyo');
+  const current = todayEvents.find((event) => event.start_time && event.end_time && event.start_time <= nowTime && event.end_time >= nowTime);
+  const next = current || todayEvents.find((event) => (event.start_time || '99:99') >= nowTime) || todayEvents.at(-1);
+  const todayWeather = weather.find((item) => item.date === today);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   async function onDragEnd(event: DragEndEvent) {
     const date = event.over?.id?.toString().replace('day:', '');
@@ -239,10 +255,11 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
     if (date && eventId) { await patch(`/api/events/${eventId}`, { date }); reload(); }
   }
   return <div className="schedule-wrap">
+    {tripIsActive && next && <section className="today-focus"><div className="today-focus-copy"><p className="eyebrow">TODAY · {formatDay(today)}</p><h2>{current ? '지금 일정' : '다음 일정'} · {next.title}</h2><p>{next.start_time || '시간 미정'}{next.end_time ? `–${next.end_time}` : ''}{next.location ? ` · ${next.location}` : ''}</p></div><div className="today-focus-meta">{todayWeather && <span>{weatherIcon(todayWeather.code)} {Math.round(todayWeather.max)}°/{Math.round(todayWeather.min)}° · 비 {todayWeather.rain}%</span>}{typeof next.meta?.transport === 'string' && <span><Route size={12}/>{next.meta.transport}</span>}{typeof next.meta?.rain === 'string' && <span><CloudRain size={12}/>{next.meta.rain}</span>}</div></section>}
     <div className="schedule-intro"><div><h2>Day plan</h2><p>일정을 잡아 원하는 날짜로 옮기세요. 시간은 카드에서 바로 수정할 수 있습니다.</p></div><span className="hint"><GripVertical size={15} /> drag to move</span></div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div className="day-grid">
-        {days.map((date, index) => <DayColumn key={date} date={date} index={index} events={trip.events.filter((e) => e.date === date)} weather={weather.find((w) => w.date === date)} reload={reload} />)}
+        {displayDays.map((date) => <DayColumn key={date} date={date} index={days.indexOf(date)} events={trip.events.filter((e) => e.date === date)} weather={weather.find((w) => w.date === date)} reload={reload} />)}
       </div>
     </DndContext>
   </div>;
@@ -260,17 +277,19 @@ function DayColumn({ date, index, events, weather, reload }: { date: string; ind
 }
 
 function EventCard({ event, reload }: { event: TripEvent; reload: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `event:${event.id}` });
+  const locked = event.source === 'booking';
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `event:${event.id}`, disabled: locked });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 20 } : undefined;
   const icon = event.kind === 'flight' ? <Plane /> : event.kind === 'hotel' ? <BedDouble /> : <MapPin />;
   async function changeTime(value: string) { await patch(`/api/events/${event.id}`, { start_time: value || null }); reload(); }
   async function remove() { await del(`/api/events/${event.id}`); reload(); }
   return <article ref={setNodeRef} style={style} className={`event-card kind-${event.kind} ${isDragging ? 'dragging' : ''}`}>
-    <button className="drag-handle" {...listeners} {...attributes}><GripVertical size={16} /></button>
+    <button className={`drag-handle ${locked ? 'locked' : ''}`} {...listeners} {...attributes} disabled={locked}>{locked ? <Lock size={13}/> : <GripVertical size={16} />}</button>
     <div className="event-icon">{icon}</div>
     <div className="event-body"><div className="event-title-row"><strong>{event.title}</strong>{event.source !== 'booking' && <button className="mini-delete" onClick={remove} aria-label="삭제"><Trash2 size={13} /></button>}</div>
-      <div className="event-time"><input type="time" value={event.start_time || ''} onChange={(e) => changeTime(e.target.value)} />{event.end_time && <span>→ {event.end_time}</span>}</div>
+      <div className="event-time"><input type="time" value={event.start_time || ''} onChange={(e) => changeTime(e.target.value)} disabled={locked} />{event.end_time && <span>→ {event.end_time}</span>}{locked && <span className="booking-lock">확정 예약</span>}</div>
       {event.location && <p><MapPin size={12} /> {event.location}</p>}
+      {event.address && <button className="copy-address" onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={10}/> 주소 복사</button>}
       {event.notes && <small>{event.notes}</small>}
       {Boolean(event.meta && Object.keys(event.meta).length) && <div className="event-meta">
         {typeof event.meta?.transport === 'string' && <span><Route size={10}/>{event.meta.transport}</span>}
@@ -442,6 +461,7 @@ function formatDay(date:string){return new Intl.DateTimeFormat('ko-KR',{month:'n
 function formatMonthDay(date:string){const [,month,day]=date.split('-').map(Number);return `${month}/${day}`;}
 function formatDateRange(start:string,end:string){const [year,month,day]=start.split('-').map(Number),[,endMonth,endDay]=end.split('-').map(Number);return `${year}. ${month}. ${day} — ${endMonth}. ${endDay}`;}
 function todayInTimeZone(timeZone:string){const parts=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone}).formatToParts(new Date());const get=(type:string)=>parts.find((part)=>part.type===type)?.value;return `${get('year')}-${get('month')}-${get('day')}`;}
+function timeInTimeZone(timeZone:string){return new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone}).format(new Date());}
 function weatherIcon(code:number){if(code>=95)return '⛈';if(code>=61)return '🌧';if(code>=51)return '🌦';if(code>=45)return '🌫';if(code>=2)return '⛅';return '☀️';}
 function weatherLabel(code:number){if(code>=95)return '뇌우';if(code>=80)return '소나기';if(code>=61)return '비';if(code>=51)return '이슬비';if(code>=45)return '안개';if(code>=3)return '흐림';if(code>=1)return '구름 조금';return '맑음';}
 function outfitForWeather(day:WeatherDay){if(day.rain>=60)return '통기성 상의 · 마르기 쉬운 하의 · 워킹화 · 우산';if(day.max>=29)return '반팔 · 얇은 하의 · 선스크린 · 모자';if(day.min<=20)return '반팔 + 얇은 셔츠/가디건 · 편한 팬츠';return '가벼운 상의 · 편한 팬츠 · 워킹화';}
