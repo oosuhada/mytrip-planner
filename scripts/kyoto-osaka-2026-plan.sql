@@ -65,6 +65,7 @@ VALUES
 ('plan-task-rain', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '접이식 우산 + 얇은 방수 겉옷', '준비물', 'TODO', '비를 기본 전제로 하되 덥고 습한 9월이라 가벼운 장비 우선', NULL, 61),
 ('plan-task-footcare', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '워킹화 + 물집 밴드', '준비물', 'TODO', '새 신발 금지. 하루 7,000–10,000보 목표', NULL, 62),
 ('plan-task-power', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '보조배터리 + 충전 케이블', '준비물', 'TODO', '보조배터리는 기내 휴대. 단자 보호', NULL, 63),
+('plan-task-tattoo-leg-cover', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '타투 가림용 발토시 구입', '준비물', 'TODO', 'AMANEK 대욕장 이용 시 필요할 수 있도록 피부색/불투명 발토시를 한국에서 미리 준비', NULL, 64),
 ('plan-task-offline', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '항공·호텔·HARUKA·VJW·eSIM 오프라인 캡처', '9/12 밤', 'TODO', '호텔 주소 일본어/영문도 함께 저장하고 mytrip.oosu.dev 접속 확인', NULL, 70),
 ('plan-task-weather', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '9/13 교토 시간대별 비 예보 최종 확인', '9/12 밤', 'TODO', '폭우면 야외 관광을 추가하지 말고 9/15 Fushimi Inari부터 삭제', NULL, 71)
 ON CONFLICT(id) DO UPDATE SET
@@ -109,7 +110,7 @@ VALUES
 ('plan-transport-osaka-local', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'transport', 'Osaka local', 'Metro + 도보', 'Nipponbashi/Ebisucho 숙소를 기준으로 Namba·Dotonbori는 도보권. Osaka Castle만 지하철 이동. 비에는 Shinsaibashi/Dotonbori 상가를 피난 동선으로 활용.', 40),
 ('plan-transport-osaka-kix', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'transport', 'Osaka → KIX', 'Sakaisuji Line + Nankai Airport Express', 'Ebisucho→Tengachaya 지하철, Tengachaya→KIX는 Nankai Airport Express. 07:15 숙소 출발, 08:45–09:00 KIX 도착 목표. Rapi:t은 지연/시간 위험 때만.', 50),
 ('plan-connect-esim', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'eSIM 5GB each', 'Nomad US$10 / TravelSim Asia US$9.99', '5일간 지도·번역·mytrip 사용 기준 5GB가 안전. Nomad는 KDDI au/SoftBank, tethering 가능. 최저 공개가는 TravelSim Asia 5GB/30d US$9.99.', 10),
-('plan-connect-icoca', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'ICOCA', 'pay-as-you-go', '관광 패스보다 일반 IC 결제가 기본. 물리 ICOCA는 보통 ¥2,000(이용액 ¥1,500 + 보증금 ¥500). iPhone/Apple Watch 사용 가능 환경이면 모바일 IC도 검토.', 20),
+('plan-connect-icoca', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'ICOCA / card tap', 'ICOCA remains the safest default', '신용카드 터치결제는 이번 동선에서 부분 지원만 된다. Osaka Metro는 Visa/Mastercard/JCB/Amex/Diners/Discover/UnionPay 터치결제를 지원하고, Nankai도 대응역의 전용 개찰기에서 지원한다. 하지만 2026-09 현재 Kyoto City Bus/Subway는 신용카드 tap 미지원(2027 도입 목표), Keihan도 신용카드 tap 운임결제 미지원. 따라서 교토+Keihan까지 끊김 없이 쓰려면 ICOCA/호환 교통계 IC가 가장 안전하다.', 20),
 ('plan-connect-haruka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'HARUKA price rule', '¥2,200 ceiling', 'Klook/KKday는 정적 페이지에서 9/13 KIX→Kyoto 성인 최종가가 노출되지 않아 결제 직전 확인 필수. KKday 앱 첫구매 쿠폰은 조건부이며 할인 후 실결제가로 비교.', 30)
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, section=excluded.section, title=excluded.title,
@@ -188,7 +189,9 @@ VALUES
 ('plan-pack-type-a', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '일본 Type-A 돼지코 2개+', '전자기기', '공용', 0, '일본 100V Type A. 100–240V 지원 충전기에 사용'),
 ('plan-pack-rain-shell', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '얇은 방수 겉옷', '의류 · 신발', '공용', 0, '비를 전제로 하되 9월 더위 때문에 가벼운 레이어 우선'),
 ('plan-pack-blister', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '물집 밴드 / 발 관리 키트', '건강', '공용', 0, '하루 7,000–10,000보 대비'),
-('plan-pack-waterproof-pouch', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '작은 방수 지퍼 파우치', '생활', '공용', 0, '여권·영수증·전자기기를 폭우에서 보호')
+('plan-pack-waterproof-pouch', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '작은 방수 지퍼 파우치', '생활', '공용', 0, '여권·영수증·전자기기를 폭우에서 보호'),
+('plan-pack-sony-mirrorless', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sony 미러리스 카메라', '전자기기', 'Oosu', 0, '카메라 본체 + 배터리/메모리카드/충전 확인'),
+('plan-pack-neck-pillow', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '목베개', '생활', '공용', 0, '왕복 항공 이동 및 공항 대기용')
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, label=excluded.label, category=excluded.category,
   owner=excluded.owner, reason=excluded.reason;

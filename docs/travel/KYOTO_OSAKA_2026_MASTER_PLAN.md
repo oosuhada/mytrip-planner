@@ -338,6 +338,16 @@ Use **pay-as-you-go ICOCA / compatible IC transit payment** for local transport.
 - For this itinerary the ¥1,100 day pass is not expected to pay off: 9/13 needs only the Kyoto Station→Kawaramachi Gojo bus, 9/14 uses only a small number of city-bus rides, and 9/15 relies mainly on **Keihan**, which is outside the Kyoto City Subway & Bus pass.
 - Ordinary automatic IC transfer discounts ended in 2023. Kyoto now has an ICOCA/PiTaPa points program, but it is not worth optimizing around for this short tourist itinerary.
 
+## Contactless bank-card tap: useful, but not a full ICOCA replacement
+
+- **Osaka Metro:** supported. Contactless Visa / Mastercard / JCB / American Express / Diners / Discover / UnionPay cards and compatible phone/watch wallets can be tapped at supported readers without prior registration.
+- **Nankai Railway:** supported at designated stations using dedicated touch-payment gates. Confirm the entry and exit stations are both supported before relying on it; this is useful for the Tengachaya↔KIX leg when the dedicated readers are available.
+- **Kyoto City Bus / Kyoto Subway:** **not supported yet as of 2026-09**. Kyoto is working toward credit-card contactless payment during FY2027; current official guidance still says bank/credit cards cannot be used directly for bus fare, and subway credit-card tap is unavailable.
+- **Keihan Railway:** **not supported** for ordinary fare payment by contactless credit card.
+- **JR-WEST / HARUKA:** use the HARUKA ticket/QR and ICOCA-compatible transport IC where applicable; do not assume a normal bank-card tap works at JR-West gates.
+
+**Decision for this trip:** a contactless bank card can reduce ICOCA usage in Osaka, but because Kyoto City Bus/Subway and Keihan are part of the actual itinerary, **ICOCA (or another nationwide-compatible transit IC) remains the simplest all-route local-payment fallback**. Do not buy a Kyoto/Kansai unlimited pass solely to avoid carrying ICOCA.
+
 ## Do not pre-buy a broad Kansai transport pass
 
 This itinerary does not contain enough expensive long-distance rides to justify a wide unlimited pass. Main movements are:
@@ -469,6 +479,8 @@ JNTO: https://www.japan.travel/en/plan/travel-insurance-in-japan/
 - [ ] Blister plasters / small foot-care kit
 - [ ] Power bank + charging cables; power bank stays in carry-on
 - [ ] Small waterproof zip pouch for passport/electronics
+- [ ] **Sony mirrorless camera** + battery / memory card / charger check
+- [ ] **Neck pillow**
 - [ ] Normal personal medicine in appropriate packaging
 - [ ] Two eSIMs + offline QR/setup screenshots
 - [ ] Small amount of yen cash + card(s)
@@ -499,6 +511,7 @@ Japan electricity reference: https://www.japan.travel/en/plan/plug-and-electrici
 - [ ] Check/buy travel insurance
 - [ ] Buy Type-A plug adapters if missing
 - [ ] Prepare umbrella + waterproof outer layer
+- [ ] Buy **tattoo-cover leg gaiter / sleeve (발토시)** for AMANEK bath use if needed
 
 ## 9/12 night
 
