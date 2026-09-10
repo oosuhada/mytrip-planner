@@ -91,7 +91,7 @@ function HomePage() {
 }
 
 type WorkspaceMode = 'plan' | 'trip';
-type Tab = 'today' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type Tab = 'today' | 'trip-weather' | 'phrases' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 
 function TripPage({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -166,6 +166,8 @@ function TripPage({ tripId }: { tripId: string }) {
             <NavButton active={tab === 'inbox'} icon={<Import />} label="AI 가져오기" onClick={() => selectTab('inbox')} />
           </> : <>
             <NavButton active={tab === 'today'} icon={<Navigation />} label="오늘" onClick={() => selectTab('today')} />
+            <NavButton active={tab === 'trip-weather'} icon={<CloudRain />} label="날씨 · 오늘의 코디" onClick={() => selectTab('trip-weather')} />
+            <NavButton active={tab === 'phrases'} icon={<MessageCircle />} label="일본어 표현" onClick={() => selectTab('phrases')} />
             <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="전체 일정" onClick={() => selectTab('schedule')} />
             <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
           </>}
@@ -182,6 +184,8 @@ function TripPage({ tripId }: { tripId: string }) {
         <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
         <div className="content-area">
           {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} reload={load} />}
+          {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
+          {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} />}
           {tab === 'map' && <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />}
@@ -285,6 +289,8 @@ function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelect
     ['inbox', <Import/>, 'AI 가져오기'],
   ] : [
     ['today', <Navigation/>, '오늘'],
+    ['trip-weather', <CloudRain/>, '날씨 · 오늘의 코디'],
+    ['phrases', <MessageCircle/>, '일본어 표현'],
     ['schedule', <CalendarDays/>, '전체 일정'],
     ['map', <MapPin/>, '지도'],
   ];
@@ -323,37 +329,10 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
   const nextIndex = currentIndex >= 0 ? currentIndex : events.findIndex((event) => (event.start_time || '99:99') >= now);
   const anchorIndex = Math.max(0, nextIndex >= 0 ? nextIndex : Math.max(0, events.length - 1));
   const liveEvents = events.slice(Math.max(0, anchorIndex - (currentIndex >= 0 ? 0 : 1)), anchorIndex + 3);
-  const dayWeather = weather.find((item) => item.date === focusDate);
   const mealSlots = (trip.meal_slots || []).filter((slot) => slot.date === focusDate);
   const restaurants = new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const));
   const decisions = (trip.decision_slots || []).filter((slot) => slot.date === focusDate);
   const reservationRows = mealSlots.map((slot) => ({ slot, restaurant: slot.selected_restaurant_id ? restaurants.get(slot.selected_restaurant_id) : undefined })).filter((row) => row.restaurant);
-  const phraseGroups = [
-    { title: '식당', icon: <Utensils/>, items: [
-      ['すみません、二人です。', '스미마센, 후타리 데스.', '실례합니다, 두 명이에요.'],
-      ['予約しています。', '요야쿠 시테이마스.', '예약했습니다.'],
-      ['これは辛いですか？', '코레와 카라이 데스카?', '이거 매운가요?'],
-      ['魚以外の海鮮は食べられません。', '사카나 이가이노 카이센와 타베라레마센.', '생선 이외의 해산물은 먹을 수 없어요.'],
-    ] },
-    { title: '교통', icon: <Navigation/>, items: [
-      ['この電車は京都駅に行きますか？', '코노 덴샤와 교토에키니 이키마스카?', '이 전철은 교토역에 가나요?'],
-      ['河原町五条で降りたいです。', '카와라마치 고조데 오리타이 데스.', '가와라마치고조에서 내리고 싶어요.'],
-      ['ICOCAは使えますか？', '이코카와 츠카에마스카?', 'ICOCA를 사용할 수 있나요?'],
-      ['この乗り場で合っていますか？', '코노 노리바데 앗테이마스카?', '이 승강장이 맞나요?'],
-    ] },
-    { title: '호텔', icon: <Hotel/>, items: [
-      ['荷物を預けてもいいですか？', '니모츠오 아즈케테모 이이데스카?', '짐을 맡겨도 될까요?'],
-      ['チェックインをお願いします。', '첵쿠인오 오네가이시마스.', '체크인 부탁드립니다.'],
-      ['大浴場はどこですか？', '다이요쿠조와 도코데스카?', '대욕장은 어디인가요?'],
-      ['この住所まで行きたいです。', '코노 주소마데 이키타이 데스.', '이 주소까지 가고 싶어요.'],
-    ] },
-    { title: '도움 요청', icon: <MessageCircle/>, items: [
-      ['もう一度お願いします。', '모- 이치도 오네가이시마스.', '한 번 더 말씀해 주세요.'],
-      ['ゆっくり話してください。', '윳쿠리 하나시테 쿠다사이.', '천천히 말씀해 주세요.'],
-      ['英語は話せますか？', '에이고와 하나세마스카?', '영어 하실 수 있나요?'],
-      ['トイレはどこですか？', '토이레와 도코데스카?', '화장실은 어디인가요?'],
-    ] },
-  ];
   async function selectPlanB(slotId: string, optionId: string) {
     await patch(`/api/decision-slots/${slotId}/select`, { option_id: optionId });
     reload();
@@ -361,7 +340,6 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
   return <div className="trip-live-page">
     <section className="trip-live-hero">
       <div><p className="eyebrow">{active ? 'LIVE TRIP' : 'TRIP MODE PREVIEW'} · {formatDay(focusDate)}</p><h2>{active ? '지금 필요한 것만.' : '여행 중 화면 미리보기'}</h2><p>{active ? `${now} 일본 시간 기준으로 현재·다음 일정과 바로 쓸 정보만 보여줍니다.` : '출발하면 이 화면이 기본으로 열리고 오늘 날짜 일정에 자동 맞춰집니다.'}</p></div>
-      {dayWeather && <div className="trip-live-weather"><span>{weatherIcon(dayWeather.code)}</span><strong>{Math.round(dayWeather.max)}° / {Math.round(dayWeather.min)}°</strong><small>{weatherLabel(dayWeather.code)} · 강수 {dayWeather.rain}%</small></div>}
     </section>
 
     <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><b>{events.length}개 일정</b></div><div className="trip-live-events">{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; return <article className={`trip-live-event ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{isNow ? 'NOW' : index === 0 ? 'NEXT' : 'THEN'}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
@@ -370,8 +348,51 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
 
     {decisions.length > 0 && <section className="trip-live-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">PLAN B</p><h3>상황 바뀌면 바로 전환</h3></span></div></div><div className="trip-planb-list">{decisions.map((slot) => { const selected = slot.options.find((option) => option.id === slot.selected_option_id); const alternatives = slot.options.filter((option) => option.id !== slot.selected_option_id); if (!selected || !alternatives.length) return null; return <article key={slot.id}><header><span>{slot.time || ''} · {slot.title}</span><strong>{selected.label}</strong></header><div className="trip-planb-options">{alternatives.map((option) => <div key={option.id}><span><b>PLAN B</b>{option.label}<small>{[option.duration, option.price].filter(Boolean).join(' · ')}</small></span><button onClick={() => selectPlanB(slot.id, option.id)}>이걸로 변경</button></div>)}</div></article>; })}</div></section>}
 
-    <section className="trip-live-section japanese-phrases"><div className="trip-section-heading"><div><MessageCircle/><span><p className="eyebrow">USEFUL JAPANESE</p><h3>바로 보여주거나 읽는 일본어</h3></span></div><b>탭하면 일본어 복사</b></div><div className="phrase-groups">{phraseGroups.map((group) => <section key={group.title}><header>{group.icon}<h4>{group.title}</h4></header><div>{group.items.map(([jp, sound, meaning]) => <button key={jp} onClick={() => navigator.clipboard?.writeText(jp)}><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small><Copy size={14}/></button>)}</div></section>)}</div></section>
   </div>;
+}
+
+const tripPhraseGroups = [
+  { title: '식당', icon: <Utensils/>, items: [
+    ['すみません、二人です。', '스미마센, 후타리 데스.', '실례합니다, 두 명이에요.'],
+    ['予約しています。', '요야쿠 시테이마스.', '예약했습니다.'],
+    ['これは辛いですか？', '코레와 카라이 데스카?', '이거 매운가요?'],
+    ['魚以外の海鮮は食べられません。', '사카나 이가이노 카이센와 타베라레마센.', '생선 이외의 해산물은 먹을 수 없어요.'],
+  ] },
+  { title: '교통', icon: <Navigation/>, items: [
+    ['この電車は京都駅に行きますか？', '코노 덴샤와 교토에키니 이키마스카?', '이 전철은 교토역에 가나요?'],
+    ['河原町五条で降りたいです。', '카와라마치 고조데 오리타이 데스.', '가와라마치고조에서 내리고 싶어요.'],
+    ['ICOCAは使えますか？', '이코카와 츠카에마스카?', 'ICOCA를 사용할 수 있나요?'],
+    ['この乗り場で合っていますか？', '코노 노리바데 앗테이마스카?', '이 승강장이 맞나요?'],
+  ] },
+  { title: '호텔', icon: <Hotel/>, items: [
+    ['荷物を預けてもいいですか？', '니모츠오 아즈케테모 이이데스카?', '짐을 맡겨도 될까요?'],
+    ['チェックインをお願いします。', '첵쿠인오 오네가이시마스.', '체크인 부탁드립니다.'],
+    ['大浴場はどこですか？', '다이요쿠조와 도코데스카?', '대욕장은 어디인가요?'],
+    ['この住所まで行きたいです。', '코노 주소마데 이키타이 데스.', '이 주소까지 가고 싶어요.'],
+  ] },
+  { title: '도움 요청', icon: <MessageCircle/>, items: [
+    ['もう一度お願いします。', '모- 이치도 오네가이시마스.', '한 번 더 말씀해 주세요.'],
+    ['ゆっくり話してください。', '윳쿠리 하나시테 쿠다사이.', '천천히 말씀해 주세요.'],
+    ['英語は話せますか？', '에이고와 하나세마스카?', '영어 하실 수 있나요?'],
+    ['トイレはどこですか？', '토이레와 도코데스카?', '화장실은 어디인가요?'],
+  ] },
+];
+
+function TripJapanesePanel() {
+  return <div className="trip-tool-page japanese-tool-page"><div className="trip-tool-intro"><div><p className="eyebrow">USEFUL JAPANESE</p><h2>일본어 표현</h2><p>직원에게 보여주거나 그대로 읽기 쉽게 일본어 · 한글 발음 · 뜻을 분리했습니다. 카드를 누르면 일본어 문장이 복사됩니다.</p></div><b>{tripPhraseGroups.reduce((sum, group) => sum + group.items.length, 0)} phrases</b></div><div className="phrase-groups">{tripPhraseGroups.map((group) => <section key={group.title}><header>{group.icon}<h4>{group.title}</h4></header><div>{group.items.map(([jp, sound, meaning]) => <button key={jp} onClick={() => navigator.clipboard?.writeText(jp)}><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small><Copy size={14}/></button>)}</div></section>)}</div></div>;
+}
+
+function TripWeatherOutfitPanel({ trip, weather }: { trip: Trip; weather: WeatherDay[] }) {
+  const today = todayInTimeZone('Asia/Tokyo');
+  const active = today >= trip.start_date && today <= trip.end_date;
+  const focusDate = active ? today : trip.start_date;
+  const dayWeather = weather.find((item) => item.date === focusDate) || weather[0];
+  const rain = dayWeather?.rain ?? 0;
+  const max = dayWeather?.max ?? 27;
+  const min = dayWeather?.min ?? 20;
+  const outfit = dayWeather ? outfitForWeather(dayWeather) : '가벼운 상의 + 편한 하의 + 워킹화';
+  const carry = [rain >= 40 ? '접이식 우산' : '작은 우산', rain >= 60 ? '얇은 방수 겉옷' : null, '보조배터리', '물집 밴드'].filter(Boolean);
+  return <div className="trip-tool-page weather-outfit-page"><div className="trip-tool-intro"><div><p className="eyebrow">WEATHER · OUTFIT · {formatDay(focusDate)}</p><h2>날씨 · 오늘의 코디</h2><p>{active ? '오늘 일본 날씨와 도보 일정에 맞춘 옷차림만 빠르게 확인합니다.' : '여행 전에는 Day 1 예보를 기준으로 미리보기 합니다.'}</p></div></div>{dayWeather ? <><section className="weather-outfit-hero"><div className="weather-outfit-main"><span>{weatherIcon(dayWeather.code)}</span><div><strong>{Math.round(max)}° / {Math.round(min)}°</strong><p>{weatherLabel(dayWeather.code)} · 강수확률 {Math.round(rain)}%</p></div></div><div className="weather-outfit-advice"><span>오늘 코디</span><h3>{outfit}</h3><p>{rain >= 60 ? '비가 강하면 야외 한 곳은 과감히 빼고 젖어도 관리하기 쉬운 하의와 워킹화를 우선.' : rain >= 30 ? '우산을 바로 꺼낼 수 있게 백팩 바깥쪽에 두고, 실내 냉방용 얇은 레이어를 챙기기.' : '통기성 좋은 옷과 워킹화를 기본으로 하고 실내 냉방용 얇은 레이어만 챙기기.'}</p></div></section><section className="trip-live-section outfit-carry-section"><div className="trip-section-heading"><div><Luggage/><span><p className="eyebrow">TAKE TODAY</p><h3>오늘 바로 챙길 것</h3></span></div></div><div className="outfit-carry-list">{carry.map((item) => <span key={item}><Check size={14}/>{item}</span>)}</div></section><section className="trip-live-section mini-forecast-section"><div className="trip-section-heading"><div><CloudRain/><span><p className="eyebrow">TRIP FORECAST</p><h3>여행 기간 예보</h3></span></div></div><div className="weather-days">{weather.map((item) => <div key={item.date}><span>{formatDay(item.date)}</span><b>{weatherIcon(item.code)} {Math.round(item.max)}° / {Math.round(item.min)}°</b><small>{weatherLabel(item.code)} · 강수 {item.rain}%</small></div>)}</div></section></> : <section className="trip-live-section"><p>예보를 불러오는 중입니다.</p></section>}</div>;
 }
 
 function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
@@ -380,6 +401,7 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
   const tripIsActive = today >= trip.start_date && today <= trip.end_date;
   const initialDay = tripIsActive ? today : days[0];
   const [selectedDay, setSelectedDay] = useState(initialDay);
+  const [viewMode, setViewMode] = useState<'day'|'all'>('day');
   const dayGridRef = useRef<HTMLDivElement | null>(null);
   const didInitialScroll = useRef(false);
   const todayEvents = trip.events.filter((event) => event.date === today).sort((a, b) => (a.start_time || '99:99').localeCompare(b.start_time || '99:99'));
@@ -392,7 +414,7 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
     setSelectedDay(initialDay);
   }, [initialDay]);
   useEffect(() => {
-    if (didInitialScroll.current || !dayGridRef.current || !initialDay) return;
+    if (viewMode !== 'all' || didInitialScroll.current || !dayGridRef.current || !initialDay) return;
     const frame = requestAnimationFrame(() => {
       const target = dayGridRef.current?.querySelector<HTMLElement>(`[data-day-date="${initialDay}"]`);
       if (!target) return;
@@ -400,7 +422,7 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
       didInitialScroll.current = true;
     });
     return () => cancelAnimationFrame(frame);
-  }, [initialDay]);
+  }, [initialDay, viewMode]);
   const selectedIndex = Math.max(0, days.indexOf(selectedDay));
   function moveSelectedDay(offset: number) {
     const nextIndex = Math.max(0, Math.min(days.length - 1, selectedIndex + offset));
@@ -411,16 +433,17 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
     const eventId = event.active.id.toString().replace('event:', '');
     if (date && eventId) { await patch(`/api/events/${eventId}`, { date }); reload(); }
   }
-  return <div className="schedule-wrap">
-    <div className="mobile-day-switcher" aria-label="여행 날짜 선택">
+  return <div className={`schedule-wrap schedule-view-${viewMode}`}>
+    <div className="schedule-view-toolbar"><div className="schedule-view-toggle" aria-label="일정 보기 방식"><button className={viewMode === 'day' ? 'active' : ''} onClick={() => setViewMode('day')}>날짜별</button><button className={viewMode === 'all' ? 'active' : ''} onClick={() => { didInitialScroll.current = false; setViewMode('all'); }}>전체보기</button></div><span>{viewMode === 'day' ? `${selectedIndex + 1} / ${days.length} · 한 날짜 집중 보기` : '5일 전체 · 좌우 스크롤'}</span></div>
+    {viewMode === 'day' && <div className="mobile-day-switcher schedule-day-switcher" aria-label="여행 날짜 선택">
       <button className="day-step" disabled={selectedIndex === 0} onClick={() => moveSelectedDay(-1)} aria-label="이전 날짜"><ArrowLeft size={18}/></button>
       <div className="mobile-day-tabs">{days.map((date, index) => <button key={date} className={selectedDay === date ? 'active' : ''} onClick={() => setSelectedDay(date)}><span>DAY {index + 1}</span><strong>{formatMonthDay(date)}</strong></button>)}</div>
       <button className="day-step next" disabled={selectedIndex === days.length - 1} onClick={() => moveSelectedDay(1)} aria-label="다음 날짜"><ChevronRight size={18}/></button>
-    </div>
+    </div>}
     {tripIsActive && next && <section className="today-focus"><div className="today-focus-copy"><p className="eyebrow">TODAY · {formatDay(today)}</p><h2>{current ? '지금 일정' : '다음 일정'} · {next.title}</h2><p>{next.start_time || '시간 미정'}{next.end_time ? `–${next.end_time}` : ''}{next.location ? ` · ${next.location}` : ''}</p></div><div className="today-focus-meta">{todayWeather && <span>{weatherIcon(todayWeather.code)} {Math.round(todayWeather.max)}°/{Math.round(todayWeather.min)}° · 비 {todayWeather.rain}%</span>}{typeof next.meta?.transport === 'string' && <span><Route size={12}/>{next.meta.transport}</span>}{typeof next.meta?.rain === 'string' && <span><CloudRain size={12}/>{next.meta.rain}</span>}</div></section>}
     <div className="schedule-intro"><div><h2>Day plan</h2><p>일정을 잡아 원하는 날짜로 옮기세요. 시간은 카드에서 바로 수정할 수 있습니다.</p></div><span className="hint"><GripVertical size={15} /> drag to move</span></div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="day-grid" ref={dayGridRef} data-initial-day={initialDay}>
+      <div className="day-grid" ref={dayGridRef} data-initial-day={initialDay} data-view-mode={viewMode}>
         {days.map((date) => <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={trip.events.filter((e) => e.date === date)} weather={weather.find((w) => w.date === date)} reload={reload} />)}
       </div>
     </DndContext>
