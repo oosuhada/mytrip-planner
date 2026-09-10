@@ -1,0 +1,17 @@
+{
+  "name": "MyTrip — Kyoto · Osaka 2026",
+  "short_name": "MyTrip",
+  "description": "Oosu + Domenic Kyoto · Osaka travel plan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#f5f3ee",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

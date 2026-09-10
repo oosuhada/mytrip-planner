@@ -259,6 +259,37 @@ app.patch('/api/packing/bags/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/checklist/:id', (req, res) => {
+  const item = db.prepare('SELECT trip_id FROM trip_checklist_items WHERE id = ?').get(req.params.id) as any;
+  if (!item) return res.status(404).json({ error: 'Checklist item not found' });
+  if (req.params.id === 'plan-task-restaurants') {
+    const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(item.trip_id) as any;
+    const derived = Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO';
+    db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(derived, req.params.id);
+    emitTrip(item.trip_id);
+    return res.json({ ok: true, status: derived, derived: true });
+  }
+  const status = req.body.status === 'DONE' ? 'DONE' : 'TODO';
+  db.prepare('UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  emitTrip(item.trip_id);
+  res.json({ ok: true });
+});
+
+app.patch('/api/restaurants/:id', (req, res) => {
+  const restaurant = db.prepare('SELECT trip_id, reservation_action FROM restaurants WHERE id = ?').get(req.params.id) as any;
+  if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+  const requested = String(req.body.reservation_status || '');
+  const status = restaurant.reservation_action === 'WALK-IN ONLY'
+    ? 'WALK-IN'
+    : requested === 'BOOKED' ? 'BOOKED' : 'TODO';
+  db.prepare('UPDATE restaurants SET reservation_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, req.params.id);
+  const pending = db.prepare(`SELECT COUNT(*) AS n FROM restaurants WHERE trip_id = ? AND reservation_action = 'RESERVE NOW' AND reservation_status != 'BOOKED'`).get(restaurant.trip_id) as any;
+  db.prepare(`UPDATE trip_checklist_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 'plan-task-restaurants' AND trip_id = ?`)
+    .run(Number(pending?.n || 0) === 0 ? 'DONE' : 'TODO', restaurant.trip_id);
+  emitTrip(restaurant.trip_id);
+  res.json({ ok: true });
+});
+
 async function geocodeOne(q: string) {
   try {
     const url = new URL('https://nominatim.openstreetmap.org/search');
@@ -281,6 +312,10 @@ function plainDateDiffDays(start: string, end: string) {
 if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const dist = path.resolve(__dirname, '../dist');
+  app.get('/sw.js', (_req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.sendFile(path.join(dist, 'sw.js'));
+  });
   app.use(express.static(dist, { maxAge: '1h' }));
   app.get('*splat', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }

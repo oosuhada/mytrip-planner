@@ -109,6 +109,57 @@ CREATE TABLE IF NOT EXISTS imports (
   parsed_json TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS trip_checklist_items (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '출발 전',
+  status TEXT NOT NULL DEFAULT 'TODO',
+  notes TEXT,
+  url TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_checklist_trip ON trip_checklist_items(trip_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS restaurants (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  city TEXT,
+  planned_date TEXT,
+  planned_time TEXT,
+  hours TEXT,
+  price_range TEXT,
+  reservation_action TEXT NOT NULL DEFAULT 'WALK-IN ONLY',
+  reservation_status TEXT NOT NULL DEFAULT 'WALK-IN',
+  reservation_channel TEXT,
+  reservation_url TEXT,
+  notes TEXT,
+  dietary_notes TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_restaurants_trip ON restaurants(trip_id, planned_date, sort_order);
+
+CREATE TABLE IF NOT EXISTS trip_guides (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  section TEXT NOT NULL DEFAULT 'general',
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  details TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_guides_trip ON trip_guides(trip_id, section, sort_order);
 `);
 
 ensureColumn('packing_items', 'bag_id', 'TEXT');
@@ -145,7 +196,10 @@ export function getTrip(tripId: string) {
   `).all(tripId);
   const packing = db.prepare('SELECT * FROM packing_items WHERE trip_id = ? ORDER BY checked, category, created_at').all(tripId);
   const packing_bags = db.prepare('SELECT * FROM packing_bags WHERE trip_id = ? ORDER BY created_at').all(tripId);
-  return { ...(trip as object), participants, events, places, packing, packing_bags };
+  const checklist = db.prepare('SELECT * FROM trip_checklist_items WHERE trip_id = ? ORDER BY sort_order, created_at').all(tripId);
+  const restaurants = db.prepare('SELECT * FROM restaurants WHERE trip_id = ? ORDER BY COALESCE(planned_date, \'9999-12-31\'), sort_order, created_at').all(tripId);
+  const guides = db.prepare('SELECT * FROM trip_guides WHERE trip_id = ? ORDER BY section, sort_order, created_at').all(tripId);
+  return { ...(trip as object), participants, events, places, packing, packing_bags, checklist, restaurants, guides };
 }
 
 function safeJson(value: string) {
