@@ -90,12 +90,14 @@ function HomePage() {
   );
 }
 
-type Tab = 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type WorkspaceMode = 'plan' | 'trip';
+type Tab = 'today' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 
 function TripPage({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tab, setTab] = useState<Tab>('guide');
   const initialTabResolved = useRef(false);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('plan');
   const [weather, setWeather] = useState<WeatherDay[]>([]);
   const [plannerName, setPlannerName] = useState(() => {
     const stored = localStorage.getItem('mytrip-name');
@@ -126,7 +128,9 @@ function TripPage({ tripId }: { tripId: string }) {
     if (!trip || initialTabResolved.current) return;
     initialTabResolved.current = true;
     const today = todayInTimeZone('Asia/Tokyo');
-    if (today >= trip.start_date && today <= trip.end_date) setTab('schedule');
+    const active = today >= trip.start_date && today <= trip.end_date;
+    setWorkspaceMode(active ? 'trip' : 'plan');
+    setTab(active ? 'today' : 'guide');
   }, [trip?.id]);
 
   function updateName(value: string) { setPlannerName(value); localStorage.setItem('mytrip-name', value); }
@@ -139,6 +143,11 @@ function TripPage({ tripId }: { tripId: string }) {
     setTab(next);
     setMobileMenuOpen(false);
   }
+  function selectMode(next: WorkspaceMode) {
+    setWorkspaceMode(next);
+    setTab(next === 'trip' ? 'today' : 'guide');
+    setMobileMenuOpen(false);
+  }
   if (!trip) return <div className="loading"><div className="brand-mark">M</div><span>여행을 불러오는 중…</span></div>;
 
   return (
@@ -146,13 +155,20 @@ function TripPage({ tripId }: { tripId: string }) {
       <aside className="sidebar">
         <div className="sidebar-top-actions"><button className="back" onClick={() => navigate('/')}><ArrowLeft size={18} /></button><button className="sidebar-collapse" onClick={() => toggleSidebar(false)} aria-label="사이드바 닫기"><PanelLeftClose size={17}/></button></div>
         <div className="sidebar-trip"><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><span>{formatDateRange(trip.start_date, trip.end_date)}</span></div></div>
+        <ModeSwitcher mode={workspaceMode} onSelect={selectMode} />
         <nav>
-          <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="여행 가이드" onClick={() => selectTab('guide')} />
-          <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정" onClick={() => selectTab('schedule')} />
-          <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 발견" onClick={() => selectTab('map')} />
-          <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 투표" onClick={() => selectTab('votes')} count={trip.places.length} />
-          <NavButton active={tab === 'packing'} icon={<Luggage />} label="짐 · 코디" onClick={() => selectTab('packing')} />
-          <NavButton active={tab === 'inbox'} icon={<Import />} label="AI 가져오기" onClick={() => selectTab('inbox')} />
+          {workspaceMode === 'plan' ? <>
+            <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="준비 · 예약" onClick={() => selectTab('guide')} />
+            <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정 편집" onClick={() => selectTab('schedule')} />
+            <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 결정" onClick={() => selectTab('votes')} count={trip.places.length} />
+            <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 리서치" onClick={() => selectTab('map')} />
+            <NavButton active={tab === 'packing'} icon={<Luggage />} label="짐 · 코디" onClick={() => selectTab('packing')} />
+            <NavButton active={tab === 'inbox'} icon={<Import />} label="AI 가져오기" onClick={() => selectTab('inbox')} />
+          </> : <>
+            <NavButton active={tab === 'today'} icon={<Navigation />} label="오늘" onClick={() => selectTab('today')} />
+            <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="전체 일정" onClick={() => selectTab('schedule')} />
+            <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
+          </>}
         </nav>
         <div className="sidebar-bottom">
           <label className="planner-name"><Users size={15} /><input value={plannerName} onChange={(e) => updateName(e.target.value)} aria-label="내 이름" /></label>
@@ -163,19 +179,20 @@ function TripPage({ tripId }: { tripId: string }) {
       {!sidebarOpen && <button className="sidebar-reopen" onClick={() => toggleSidebar(true)} aria-label="사이드바 열기"><PanelLeftOpen size={17}/><span>메뉴</span></button>}
 
       <section className="main-panel">
-        <TripHeader trip={trip} weather={weather} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
+        <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
         <div className="content-area">
-          {tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
+          {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} reload={load} />}
+          {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} />}
           {tab === 'map' && <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />}
-          {tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
-          {tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={load} />}
-          {tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={load} />}
+          {workspaceMode === 'plan' && tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
+          {workspaceMode === 'plan' && tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={load} />}
+          {workspaceMode === 'plan' && tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={load} />}
         </div>
       </section>
-      {mobileMenuOpen && <MobileMenuDrawer trip={trip} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} />}
+      {mobileMenuOpen && <MobileMenuDrawer trip={trip} mode={workspaceMode} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelectMode={selectMode} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} />}
       {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={load} />}
-      <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} reload={load} />
+      <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} mode={workspaceMode} reload={load} />
     </main>
   );
 }
@@ -254,25 +271,34 @@ function NavButton({ active, icon, label, onClick, count }: { active: boolean; i
   return <button className={`nav-btn ${active ? 'active' : ''}`} onClick={onClick}>{icon}<span>{label}</span>{typeof count === 'number' && <b>{count}</b>}</button>;
 }
 
-function MobileMenuDrawer({ trip, tab, plannerName, onNameChange, onSelect, onClose }: { trip: Trip; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelect: (tab: Tab) => void; onClose: () => void }) {
-  const items: Array<[Tab, React.ReactNode, string, number?]> = [
-    ['guide', <ClipboardCheck/>, '여행 가이드'],
-    ['schedule', <CalendarDays/>, '일정'],
-    ['map', <Compass/>, '지도 · 발견'],
-    ['votes', <Vote/>, '후보 · 투표', trip.places.length],
+function ModeSwitcher({ mode, onSelect }: { mode: WorkspaceMode; onSelect: (mode: WorkspaceMode) => void }) {
+  return <div className="mode-switcher" aria-label="여행 모드 선택"><button className={mode === 'plan' ? 'active' : ''} onClick={() => onSelect('plan')}><span>PLAN</span><small>여행 전</small></button><button className={mode === 'trip' ? 'active' : ''} onClick={() => onSelect('trip')}><span>TRIP</span><small>여행 중</small></button></div>;
+}
+
+function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void }) {
+  const items: Array<[Tab, React.ReactNode, string, number?]> = mode === 'plan' ? [
+    ['guide', <ClipboardCheck/>, '준비 · 예약'],
+    ['schedule', <CalendarDays/>, '일정 편집'],
+    ['votes', <Vote/>, '후보 · 결정', trip.places.length],
+    ['map', <Compass/>, '지도 · 리서치'],
     ['packing', <Luggage/>, '짐 · 코디'],
     ['inbox', <Import/>, 'AI 가져오기'],
+  ] : [
+    ['today', <Navigation/>, '오늘'],
+    ['schedule', <CalendarDays/>, '전체 일정'],
+    ['map', <MapPin/>, '지도'],
   ];
   return <div className="mobile-menu-backdrop" onMouseDown={onClose}>
     <aside className="mobile-menu-drawer" onMouseDown={(event) => event.stopPropagation()}>
       <header><div><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><small>{formatDateRange(trip.start_date, trip.end_date)}</small></div></div><button onClick={onClose} aria-label="메뉴 닫기"><X size={22}/></button></header>
+      <ModeSwitcher mode={mode} onSelect={onSelectMode} />
       <nav>{items.map(([key, icon, label, count]) => <NavButton key={key} active={tab === key} icon={icon} label={label} count={count} onClick={() => onSelect(key)} />)}</nav>
       <footer><label className="planner-name"><Users size={16}/><input value={plannerName} onChange={(event) => onNameChange(event.target.value)} aria-label="내 이름" /></label><span>실시간 공동 편집</span></footer>
     </aside>
   </div>;
 }
 
-function TripHeader({ trip, weather, onAdd, onOpenMenu }: { trip: Trip; weather: WeatherDay[]; onAdd: () => void; onOpenMenu: () => void }) {
+function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { trip: Trip; weather: WeatherDay[]; mode: WorkspaceMode; onToggleMode: () => void; onAdd: () => void; onOpenMenu: () => void }) {
   const today = todayInTimeZone('Asia/Tokyo');
   const featuredWeather = weather.find((item) => item.date === today) || weather[0];
   const forecastLabel = featuredWeather ? (featuredWeather.date === today ? '오늘 예보' : `${formatMonthDay(featuredWeather.date)} 예보`) : '';
@@ -280,10 +306,72 @@ function TripHeader({ trip, weather, onAdd, onOpenMenu }: { trip: Trip; weather:
     <button className="mobile-menu-trigger" onClick={onOpenMenu} aria-label="여행 메뉴 열기"><Menu size={22}/></button>
     <div className="trip-header-copy"><p className="eyebrow">{trip.destination}</p><h1>{trip.title}</h1><p className="trip-meta"><span><CalendarDays size={14} /> {formatDateRange(trip.start_date, trip.end_date)}</span><span><Users size={14} /> {trip.participants.map((p) => p.name).join(' · ') || '친구 추가 가능'}</span></p></div>
     <div className="header-actions">
+      <button className={`header-mode-chip ${mode}`} onClick={onToggleMode}><span>{mode.toUpperCase()}</span><small>{mode === 'plan' ? '여행 전' : '여행 중'}</small></button>
       {featuredWeather && <div className="weather-chip"><span>{weatherIcon(featuredWeather.code)}</span><div><strong>{Math.round(featuredWeather.max)}° / {Math.round(featuredWeather.min)}°</strong><small>{forecastLabel} · 강수 {featuredWeather.rain}%</small></div></div>}
       <button className="primary" onClick={onAdd}><Plus size={17} /> 일정 추가</button>
     </div>
   </header>;
+}
+
+function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
+  const today = todayInTimeZone('Asia/Tokyo');
+  const active = today >= trip.start_date && today <= trip.end_date;
+  const focusDate = active ? today : trip.start_date;
+  const now = active ? timeInTimeZone('Asia/Tokyo') : '00:00';
+  const events = trip.events.filter((event) => event.date === focusDate).sort((a, b) => compareDayEvents(a, b, trip.events));
+  const currentIndex = events.findIndex((event) => event.start_time && event.end_time && event.start_time <= now && event.end_time >= now);
+  const nextIndex = currentIndex >= 0 ? currentIndex : events.findIndex((event) => (event.start_time || '99:99') >= now);
+  const anchorIndex = Math.max(0, nextIndex >= 0 ? nextIndex : Math.max(0, events.length - 1));
+  const liveEvents = events.slice(Math.max(0, anchorIndex - (currentIndex >= 0 ? 0 : 1)), anchorIndex + 3);
+  const dayWeather = weather.find((item) => item.date === focusDate);
+  const mealSlots = (trip.meal_slots || []).filter((slot) => slot.date === focusDate);
+  const restaurants = new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const));
+  const decisions = (trip.decision_slots || []).filter((slot) => slot.date === focusDate);
+  const reservationRows = mealSlots.map((slot) => ({ slot, restaurant: slot.selected_restaurant_id ? restaurants.get(slot.selected_restaurant_id) : undefined })).filter((row) => row.restaurant);
+  const phraseGroups = [
+    { title: '식당', icon: <Utensils/>, items: [
+      ['すみません、二人です。', '스미마센, 후타리 데스.', '실례합니다, 두 명이에요.'],
+      ['予約しています。', '요야쿠 시테이마스.', '예약했습니다.'],
+      ['これは辛いですか？', '코레와 카라이 데스카?', '이거 매운가요?'],
+      ['魚以外の海鮮は食べられません。', '사카나 이가이노 카이센와 타베라레마센.', '생선 이외의 해산물은 먹을 수 없어요.'],
+    ] },
+    { title: '교통', icon: <Navigation/>, items: [
+      ['この電車は京都駅に行きますか？', '코노 덴샤와 교토에키니 이키마스카?', '이 전철은 교토역에 가나요?'],
+      ['河原町五条で降りたいです。', '카와라마치 고조데 오리타이 데스.', '가와라마치고조에서 내리고 싶어요.'],
+      ['ICOCAは使えますか？', '이코카와 츠카에마스카?', 'ICOCA를 사용할 수 있나요?'],
+      ['この乗り場で合っていますか？', '코노 노리바데 앗테이마스카?', '이 승강장이 맞나요?'],
+    ] },
+    { title: '호텔', icon: <Hotel/>, items: [
+      ['荷物を預けてもいいですか？', '니모츠오 아즈케테모 이이데스카?', '짐을 맡겨도 될까요?'],
+      ['チェックインをお願いします。', '첵쿠인오 오네가이시마스.', '체크인 부탁드립니다.'],
+      ['大浴場はどこですか？', '다이요쿠조와 도코데스카?', '대욕장은 어디인가요?'],
+      ['この住所まで行きたいです。', '코노 주소마데 이키타이 데스.', '이 주소까지 가고 싶어요.'],
+    ] },
+    { title: '도움 요청', icon: <MessageCircle/>, items: [
+      ['もう一度お願いします。', '모- 이치도 오네가이시마스.', '한 번 더 말씀해 주세요.'],
+      ['ゆっくり話してください。', '윳쿠리 하나시테 쿠다사이.', '천천히 말씀해 주세요.'],
+      ['英語は話せますか？', '에이고와 하나세마스카?', '영어 하실 수 있나요?'],
+      ['トイレはどこですか？', '토이레와 도코데스카?', '화장실은 어디인가요?'],
+    ] },
+  ];
+  async function selectPlanB(slotId: string, optionId: string) {
+    await patch(`/api/decision-slots/${slotId}/select`, { option_id: optionId });
+    reload();
+  }
+  return <div className="trip-live-page">
+    <section className="trip-live-hero">
+      <div><p className="eyebrow">{active ? 'LIVE TRIP' : 'TRIP MODE PREVIEW'} · {formatDay(focusDate)}</p><h2>{active ? '지금 필요한 것만.' : '여행 중 화면 미리보기'}</h2><p>{active ? `${now} 일본 시간 기준으로 현재·다음 일정과 바로 쓸 정보만 보여줍니다.` : '출발하면 이 화면이 기본으로 열리고 오늘 날짜 일정에 자동 맞춰집니다.'}</p></div>
+      {dayWeather && <div className="trip-live-weather"><span>{weatherIcon(dayWeather.code)}</span><strong>{Math.round(dayWeather.max)}° / {Math.round(dayWeather.min)}°</strong><small>{weatherLabel(dayWeather.code)} · 강수 {dayWeather.rain}%</small></div>}
+    </section>
+
+    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><b>{events.length}개 일정</b></div><div className="trip-live-events">{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; return <article className={`trip-live-event ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{isNow ? 'NOW' : index === 0 ? 'NEXT' : 'THEN'}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
+
+    {reservationRows.length > 0 && <section className="trip-live-section"><div className="trip-section-heading"><div><Utensils/><span><p className="eyebrow">TODAY'S MEALS</p><h3>오늘 식사 · 예약</h3></span></div></div><div className="trip-meal-live-grid">{reservationRows.map(({ slot, restaurant }) => restaurant && <article key={slot.id}><RestaurantPhoto url={restaurant.image_url} kind="meal"/><div><span>{slot.time || ''} · {slot.label}</span><h4>{restaurant.name}</h4><p>{restaurant.hours || '영업시간 확인'} · {restaurant.price_range || '예산 확인'}</p><div>{restaurant.google_maps_url && <a href={restaurant.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={13}/>지도</a>}{restaurant.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}<b className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'walkin'}`}>{restaurant.reservation_status}</b></div></div></article>)}</div></section>}
+
+    {decisions.length > 0 && <section className="trip-live-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">PLAN B</p><h3>상황 바뀌면 바로 전환</h3></span></div></div><div className="trip-planb-list">{decisions.map((slot) => { const selected = slot.options.find((option) => option.id === slot.selected_option_id); const alternatives = slot.options.filter((option) => option.id !== slot.selected_option_id); if (!selected || !alternatives.length) return null; return <article key={slot.id}><header><span>{slot.time || ''} · {slot.title}</span><strong>{selected.label}</strong></header><div className="trip-planb-options">{alternatives.map((option) => <div key={option.id}><span><b>PLAN B</b>{option.label}<small>{[option.duration, option.price].filter(Boolean).join(' · ')}</small></span><button onClick={() => selectPlanB(slot.id, option.id)}>이걸로 변경</button></div>)}</div></article>; })}</div></section>}
+
+    <section className="trip-live-section japanese-phrases"><div className="trip-section-heading"><div><MessageCircle/><span><p className="eyebrow">USEFUL JAPANESE</p><h3>바로 보여주거나 읽는 일본어</h3></span></div><b>탭하면 일본어 복사</b></div><div className="phrase-groups">{phraseGroups.map((group) => <section key={group.title}><header>{group.icon}<h4>{group.title}</h4></header><div>{group.items.map(([jp, sound, meaning]) => <button key={jp} onClick={() => navigator.clipboard?.writeText(jp)}><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small><Copy size={14}/></button>)}</div></section>)}</div></section>
+  </div>;
 }
 
 function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
@@ -593,7 +681,7 @@ type AssistantChatMessage = {
   ideas?: Array<{ name: string; category?: string; reason?: string; bestTime?: string; area?: string }>;
 };
 
-function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: Trip; weather: WeatherDay[]; plannerName: string; reload: () => void }) {
+function FloatingTripAssistant({ trip, weather, plannerName, mode, reload }: { trip: Trip; weather: WeatherDay[]; plannerName: string; mode: WorkspaceMode; reload: () => void }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -609,7 +697,7 @@ function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: T
     const history = messages.slice(-8).map((message) => ({ role: message.role, content: message.content }));
     setInput(''); setMessages((prev) => [...prev, { role: 'user', content: prompt }]); setLoading(true); setOpen(true);
     try {
-      const result: any = await post(`/api/trips/${trip.id}/ai/ideas`, { prompt, weather: weatherText, history });
+      const result: any = await post(`/api/trips/${trip.id}/ai/ideas`, { prompt, weather: weatherText, history, mode });
       setMessages((prev) => [...prev, {
         role: 'assistant',
         content: result.message || '확인했습니다.',
@@ -625,10 +713,12 @@ function FloatingTripAssistant({ trip, weather, plannerName, reload }: { trip: T
     await post(`/api/trips/${trip.id}/places`, { name: idea.name, category: idea.category || 'AI 추천', address: idea.area || null, notes: [idea.reason, idea.bestTime ? `추천 시간: ${idea.bestTime}` : ''].filter(Boolean).join(' · '), saved_by: plannerName || 'Oosu' });
     reload();
   }
-  const quickPrompts = ['첫날 도착 후 선택지 정리해줘', '비 오면 일정 어떻게 바꿔?', '아직 안 한 준비 뭐야?', '오늘 식당 후보 비교해줘'];
+  const quickPrompts = mode === 'trip'
+    ? ['지금 다음 일정 알려줘', '비 오면 바로 뭘 바꿔?', '지금 식당 Plan B 뭐야?', '호텔까지 가장 편하게 가는 법']
+    : ['첫날 도착 후 선택지 정리해줘', '비 오면 일정 어떻게 바꿔?', '아직 안 한 준비 뭐야?', '오늘 식당 후보 비교해줘'];
   return <>
     <button className={`assistant-fab ${open ? 'active' : ''}`} onClick={() => setOpen(!open)} aria-label="MyTrip Assistant 열기"><Sparkles size={18}/><span>AI Assistant</span></button>
-    {open && <aside className="assistant-panel" aria-label="MyTrip Assistant"><header><div><span className="assistant-orbit"><Sparkles size={17}/></span><div><strong>MyTrip Assistant</strong><small>전체 여행 컨텍스트 연결됨</small></div></div><button onClick={() => setOpen(false)} aria-label="Assistant 닫기"><X size={20}/></button></header><div className="assistant-context-strip"><span>KYOTO</span><span>OSAKA</span><b>{trip.events.length} 일정</b><b>{trip.places.length} 후보</b><b>{trip.checklist.filter((item) => item.status !== 'DONE').length} 준비 남음</b></div><div className="assistant-quick">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div><div className="assistant-messages" ref={messagesRef}>{messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'assistant' ? 'AI' : plannerName || '나'}</span><AssistantMessageBody content={message.content} />{message.sections?.length ? <div className="assistant-sections">{message.sections.map((section, sectionIndex) => <section key={`${section.title}-${sectionIndex}`}><h4>{section.title}</h4><ol>{section.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}>{item}</li>)}</ol></section>)}</div> : null}{message.ideas?.length ? <div className="assistant-ideas">{message.ideas.map((idea) => <article key={`${idea.name}-${idea.bestTime || ''}`}><div><strong>{idea.name}</strong>{idea.area && <small>{idea.area}</small>}</div>{idea.reason && <p>{idea.reason}</p>}<footer>{idea.bestTime && <span>{idea.bestTime}</span>}<button disabled={savedNames.has(idea.name)} onClick={() => saveIdea(idea)}><Heart size={13}/>{savedNames.has(idea.name) ? '후보에 있음' : '후보 저장'}</button></footer></article>)}</div> : null}</div>)}{loading && <div className="assistant-message assistant loading"><span>AI</span><div className="assistant-message-copy">현재 일정과 후보를 같이 확인하는 중…</div></div>}</div><div className="assistant-composer"><textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') ask(); }} placeholder="예: 9/14 비 오면 Kiyomizu를 줄이고 어디로 가?"/><button onClick={() => ask()} disabled={loading || !input.trim()}><Send size={18}/></button><small>⌘/Ctrl + Enter · 현재 일정/식당/투표/준비물 상태를 자동 참조</small></div></aside>}
+    {open && <aside className={`assistant-panel mode-${mode}`} aria-label="MyTrip Assistant"><header><div><span className="assistant-orbit"><Sparkles size={17}/></span><div><strong>MyTrip Assistant</strong><small>{mode === 'trip' ? 'TRIP · 오늘 상황 우선' : 'PLAN · 전체 계획 우선'}</small></div></div><button onClick={() => setOpen(false)} aria-label="Assistant 닫기"><X size={20}/></button></header><div className="assistant-context-strip"><span>{mode.toUpperCase()}</span><span>KYOTO</span><span>OSAKA</span><b>{trip.events.length} 일정</b><b>{trip.places.length} 후보</b><b>{trip.checklist.filter((item) => item.status !== 'DONE').length} 준비 남음</b></div><div className="assistant-quick">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div><div className="assistant-messages" ref={messagesRef}>{messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === 'assistant' ? 'AI' : plannerName || '나'}</span><AssistantMessageBody content={message.content} />{message.sections?.length ? <div className="assistant-sections">{message.sections.map((section, sectionIndex) => <section key={`${section.title}-${sectionIndex}`}><h4>{section.title}</h4><ol>{section.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`}>{item}</li>)}</ol></section>)}</div> : null}{message.ideas?.length ? <div className="assistant-ideas">{message.ideas.map((idea) => <article key={`${idea.name}-${idea.bestTime || ''}`}><div><strong>{idea.name}</strong>{idea.area && <small>{idea.area}</small>}</div>{idea.reason && <p>{idea.reason}</p>}<footer>{idea.bestTime && <span>{idea.bestTime}</span>}<button disabled={savedNames.has(idea.name)} onClick={() => saveIdea(idea)}><Heart size={13}/>{savedNames.has(idea.name) ? '후보에 있음' : '후보 저장'}</button></footer></article>)}</div> : null}</div>)}{loading && <div className="assistant-message assistant loading"><span>AI</span><div className="assistant-message-copy">현재 일정과 후보를 같이 확인하는 중…</div></div>}</div><div className="assistant-composer"><textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') ask(); }} placeholder={mode === 'trip' ? '예: 지금 비 오는데 다음 일정 어떻게 바꿀까?' : '예: 9/14 비 오면 Kiyomizu를 줄이고 어디로 가?'} /><button onClick={() => ask()} disabled={loading || !input.trim()}><Send size={18}/></button><small>⌘/Ctrl + Enter · 현재 일정/식당/투표/준비물 상태를 자동 참조</small></div></aside>}
   </>;
 }
 

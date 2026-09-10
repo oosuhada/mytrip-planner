@@ -47,6 +47,8 @@ export async function generateTripIdeas(input: {
       const result = await callOpenAI(
         `You are MyTrip Assistant, the persistent assistant for one specific trip. The supplied trip context is the source of truth for confirmed bookings, itinerary times, selected meal candidates, votes, transport decisions, packing/checklist state, traveler food constraints and researched alternatives. Answer the user's question directly and take the whole trip into account, including conflicts between days and walking/rain constraints. Do not invent live availability, current opening hours or prices beyond what the context explicitly supplies. If a user asks for a recommendation, prefer researched candidates already in the context and explain where they fit.
 
+The context includes interaction_mode and japan_now. When interaction_mode is "plan", optimize for pre-trip planning, comparison, reservations, packing and itinerary editing across all days. When interaction_mode is "trip", prioritize the Japan-local current day/time, the user's immediate next action, the selected itinerary, weather/rain fallback, nearby Plan B choices, reservations and practical navigation. In trip mode, keep answers action-oriented and avoid surfacing pre-departure chores unless the user explicitly asks for them.
+
 Return strict JSON only with this shape:
 {"message":"A short 1–3 sentence takeaway, no giant paragraph and no numbered list embedded in this string.","sections":[{"title":"Short section heading","items":["One concise actionable item","Another concise item"]}],"ideas":[{"name":"...","category":"...","reason":"...","bestTime":"...","area":"..."}]}.
 

@@ -242,6 +242,8 @@ Additional alternatives currently linked in MyTrip include **Sushi no Musashi Sa
 - On mobile, the six-tab strip is intentionally removed. A compact **hamburger → left drawer** owns global navigation, while the Schedule screen uses a sticky **Day 1–5 date switcher** and renders only the selected day. This avoids horizontal day scrolling on a phone.
 - The floating assistant opens as a **full-screen mobile sheet** (100dvh) so long itinerary-aware answers have enough reading space; desktop keeps the smaller floating panel.
 - Itinerary cards always have a visual area. Restaurant/attraction/hotel/rail imagery uses official or official-source-page images where stable; otherwise the visual becomes an explicit Google Maps-linked route/place placeholder rather than an empty/broken image. Google Maps photos are not hotlinked without a configured Places API key.
+- The application has two explicit experiences over the same source-of-truth data: **PLAN** for pre-trip research, comparisons, reservations, packing, voting and itinerary editing; **TRIP** for the Japan-local current day, immediate next actions, Maps, selected meals, Plan B changes and on-the-road AI help. Before the trip PLAN is the default; during 9/13–9/17 TRIP is the default, with manual switching always available.
+- TRIP mode includes a mobile-readable **Useful Japanese** section grouped into restaurant, transport, hotel and help phrases. Every phrase shows Japanese text, Korean phonetic reading and Korean meaning; tapping a phrase copies the Japanese text for showing to staff.
 
 ### Expanded research pool — 2026-09-10
 

@@ -187,7 +187,11 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
   const restaurants = new Map((trip.restaurants || []).map((restaurant: any) => [restaurant.id, restaurant]));
   const bags = new Map((trip.packing_bags || []).map((bag: any) => [bag.id, bag]));
+  const interactionMode = req.body.mode === 'trip' ? 'trip' : 'plan';
+  const japanNow = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo', dateStyle: 'short', timeStyle: 'short', hour12: false }).format(new Date());
   const context = {
+    interaction_mode: interactionMode,
+    japan_now: japanNow,
     trip: { title: trip.title, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date },
     travelers: (trip.participants || []).map((person: any) => person.name),
     rules: (trip.guides || []).filter((guide: any) => guide.section === 'rules').map((guide: any) => ({ title: guide.title, details: guide.details })),
