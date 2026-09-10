@@ -328,7 +328,8 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
   const currentIndex = events.findIndex((event) => event.start_time && event.end_time && event.start_time <= now && event.end_time >= now);
   const nextIndex = currentIndex >= 0 ? currentIndex : events.findIndex((event) => (event.start_time || '99:99') >= now);
   const anchorIndex = Math.max(0, nextIndex >= 0 ? nextIndex : Math.max(0, events.length - 1));
-  const liveEvents = events.slice(Math.max(0, anchorIndex - (currentIndex >= 0 ? 0 : 1)), anchorIndex + 3);
+  const liveEvents = events.slice(Math.max(0, anchorIndex - (currentIndex >= 0 ? 0 : 1)));
+  const liveEventRef = useRef<HTMLDivElement | null>(null);
   const mealSlots = (trip.meal_slots || []).filter((slot) => slot.date === focusDate);
   const restaurants = new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const));
   const decisions = (trip.decision_slots || []).filter((slot) => slot.date === focusDate);
@@ -337,12 +338,17 @@ function TripLivePanel({ trip, weather, reload }: { trip: Trip; weather: Weather
     await patch(`/api/decision-slots/${slotId}/select`, { option_id: optionId });
     reload();
   }
+  function scrollLiveEvents(direction: -1 | 1) {
+    const node = liveEventRef.current;
+    if (!node) return;
+    node.scrollBy({ left: direction * Math.max(320, node.clientWidth * .78), behavior: 'smooth' });
+  }
   return <div className="trip-live-page">
     <section className="trip-live-hero">
       <div><p className="eyebrow">{active ? 'LIVE TRIP' : 'TRIP MODE PREVIEW'} · {formatDay(focusDate)}</p><h2>{active ? '지금 필요한 것만.' : '여행 중 화면 미리보기'}</h2><p>{active ? `${now} 일본 시간 기준으로 현재·다음 일정과 바로 쓸 정보만 보여줍니다.` : '출발하면 이 화면이 기본으로 열리고 오늘 날짜 일정에 자동 맞춰집니다.'}</p></div>
     </section>
 
-    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><b>{events.length}개 일정</b></div><div className="trip-live-events">{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; return <article className={`trip-live-event ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{isNow ? 'NOW' : index === 0 ? 'NEXT' : 'THEN'}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
+    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><div className="trip-scroll-controls"><b>{liveEvents.length}개 일정</b><button onClick={() => scrollLiveEvents(-1)} aria-label="이전 일정"><ArrowLeft size={15}/></button><button onClick={() => scrollLiveEvents(1)} aria-label="다음 일정"><ChevronRight size={15}/></button></div></div><div className="trip-live-events" ref={liveEventRef}>{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; return <article className={`trip-live-event ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{isNow ? 'NOW' : index === 0 ? 'NEXT' : 'THEN'}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
 
     {reservationRows.length > 0 && <section className="trip-live-section"><div className="trip-section-heading"><div><Utensils/><span><p className="eyebrow">TODAY'S MEALS</p><h3>오늘 식사 · 예약</h3></span></div></div><div className="trip-meal-live-grid">{reservationRows.map(({ slot, restaurant }) => restaurant && <article key={slot.id}><RestaurantPhoto url={restaurant.image_url} kind="meal"/><div><span>{slot.time || ''} · {slot.label}</span><h4>{restaurant.name}</h4><p>{restaurant.hours || '영업시간 확인'} · {restaurant.price_range || '예산 확인'}</p><div>{restaurant.google_maps_url && <a href={restaurant.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={13}/>지도</a>}{restaurant.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}<b className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'walkin'}`}>{restaurant.reservation_status}</b></div></div></article>)}</div></section>}
 
