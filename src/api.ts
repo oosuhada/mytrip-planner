@@ -1,4 +1,4 @@
-type PendingMutation = {
+export type PendingMutation = {
   id: string;
   path: string;
   method: 'PATCH';
@@ -50,7 +50,7 @@ async function queueMutation(path: string, body: unknown) {
   for (const item of existing) await removeMutation(item.id);
   const pending: PendingMutation = { id: mutationId(), path, method: 'PATCH', body: mergedBody, created_at: Date.now() };
   await withStore('readwrite', (store) => store.put(pending));
-  emitSyncState();
+  emitSyncState({ mutation: pending });
   return pending;
 }
 
@@ -98,7 +98,7 @@ export async function pendingMutationCount() {
   return (await listPending()).length;
 }
 
-export function subscribeSyncState(listener: (detail: { pending: number; online: boolean; failed?: boolean }) => void) {
+export function subscribeSyncState(listener: (detail: { pending: number; online: boolean; failed?: boolean; mutation?: PendingMutation }) => void) {
   const handler = (event: Event) => listener((event as CustomEvent).detail);
   window.addEventListener(SYNC_EVENT, handler);
   return () => window.removeEventListener(SYNC_EVENT, handler);
@@ -123,17 +123,13 @@ export async function flushQueuedMutations() {
   return { flushed, failed };
 }
 
-export async function applyPendingMutationsToTrip<T extends Record<string, any>>(source: T): Promise<T> {
-  const pending = await listPending().catch(() => []);
-  if (!pending.length) return source;
-  const trip = structuredClone(source);
-  for (const mutation of pending) {
+function applyMutationToTrip<T extends Record<string, any>>(trip: T, mutation: PendingMutation) {
     const body = (mutation.body || {}) as Record<string, any>;
     let match = mutation.path.match(/^\/api\/events\/([^/]+)$/);
     if (match) {
       const event = trip.events?.find((item: any) => item.id === match![1]);
       if (event) Object.assign(event, body);
-      continue;
+      return;
     }
     match = mutation.path.match(/^\/api\/meal-slots\/([^/]+)\/select$/);
     if (match) {
@@ -154,7 +150,7 @@ export async function applyPendingMutationsToTrip<T extends Record<string, any>>
           completed_at: null,
         });
       }
-      continue;
+      return;
     }
     match = mutation.path.match(/^\/api\/decision-slots\/([^/]+)\/select$/);
     if (match) {
@@ -175,25 +171,39 @@ export async function applyPendingMutationsToTrip<T extends Record<string, any>>
           completed_at: null,
         });
       }
-      continue;
+      return;
     }
     match = mutation.path.match(/^\/api\/checklist\/([^/]+)$/);
     if (match) {
       const item = trip.checklist?.find((row: any) => row.id === match![1]);
       if (item) item.status = body.status;
-      continue;
+      return;
     }
     match = mutation.path.match(/^\/api\/restaurants\/([^/]+)$/);
     if (match) {
       const item = trip.restaurants?.find((row: any) => row.id === match![1]);
       if (item && body.reservation_status) item.reservation_status = body.reservation_status;
-      continue;
+      return;
     }
     match = mutation.path.match(/^\/api\/packing\/([^/]+)$/);
     if (match) {
       const item = trip.packing?.find((row: any) => row.id === match![1]);
       if (item) Object.assign(item, body);
     }
+}
+
+export function applyQueuedMutationToTrip<T extends Record<string, any>>(source: T, mutation: PendingMutation): T {
+  const trip = structuredClone(source);
+  applyMutationToTrip(trip, mutation);
+  return trip;
+}
+
+export async function applyPendingMutationsToTrip<T extends Record<string, any>>(source: T): Promise<T> {
+  const pending = await listPending().catch(() => []);
+  if (!pending.length) return source;
+  const trip = structuredClone(source);
+  for (const mutation of pending) {
+    applyMutationToTrip(trip, mutation);
   }
   return trip;
 }

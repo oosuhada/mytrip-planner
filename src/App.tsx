@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
   AlertTriangle, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
 } from 'lucide-react';
-import { api, applyPendingMutationsToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, subscribeSyncState } from './api';
+import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, subscribeSyncState } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay, WeatherHour } from './types';
 
 const socket = io({ autoConnect: true });
@@ -129,6 +129,7 @@ function TripPage({ tripId }: { tripId: string }) {
     socket.on('trip:updated', refresh);
     const unsubscribe = subscribeSyncState((detail) => {
       setSyncState({ online: detail.online, pending: detail.pending, failed: Boolean(detail.failed) });
+      if (detail.mutation) setTrip((current) => current ? applyQueuedMutationToTrip(current, detail.mutation!) : current);
       if (detail.online) load().catch(() => undefined);
     });
     return () => { unsubscribe(); socket.emit('trip:leave', tripId); socket.off('trip:updated', refresh); };
