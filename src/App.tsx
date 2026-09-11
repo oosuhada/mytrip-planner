@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
   AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
 } from 'lucide-react';
-import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripSnapshot, writeWeatherSnapshot } from './api';
+import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripRevision, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripRevision, writeTripSnapshot, writeWeatherSnapshot } from './api';
 import type { OfflinePackInfo } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay, WeatherHour } from './types';
 
@@ -124,10 +124,18 @@ function TripPage({ tripId }: { tripId: string }) {
   const load = useCallback(async (forceNetwork = false) => {
     const cached = await readTripSnapshot<Trip>(tripId).catch(() => null);
     if (cached) setTrip(await applyPendingMutationsToTrip(cached.value));
-    const freshEnough = Boolean(cached && Date.now() - cached.updated_at < 5 * 60 * 1000);
-    if (!navigator.onLine || (!forceNetwork && freshEnough)) return;
+    if (!navigator.onLine) return;
+    const cachedRevision = await readTripRevision(tripId).catch(() => null);
+    let currentRevision: string | null = null;
+    try {
+      currentRevision = (await api<{ revision: string }>(`/api/trips/${tripId}/revision`)).revision;
+      if (!forceNetwork && cached && cachedRevision?.value === currentRevision) return;
+    } catch {
+      if (cached) return;
+    }
     const fresh = await api<Trip>(`/api/trips/${tripId}`);
     await writeTripSnapshot(tripId, fresh).catch(() => undefined);
+    if (currentRevision) await writeTripRevision(tripId, currentRevision).catch(() => undefined);
     setTrip(await applyPendingMutationsToTrip(fresh));
   }, [tripId]);
   const reload = useCallback(() => load(true), [load]);

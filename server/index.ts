@@ -2,6 +2,7 @@ import express from 'express';
 import compression from 'compression';
 import cors from 'cors';
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
@@ -19,6 +20,7 @@ app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 
 const emitTrip = (tripId: string, event = 'trip:updated') => io.to(`trip:${tripId}`).emit(event, { tripId, at: Date.now() });
+const revisionForTrip = (trip: unknown) => createHash('sha1').update(JSON.stringify(trip)).digest('hex').slice(0, 16);
 
 io.on('connection', (socket) => {
   socket.on('trip:join', (tripId: string) => socket.join(`trip:${tripId}`));
@@ -42,6 +44,12 @@ app.get('/api/trips/:id', (req, res) => {
   const trip = getTrip(req.params.id);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
   res.json(trip);
+});
+
+app.get('/api/trips/:id/revision', (req, res) => {
+  const trip = getTrip(req.params.id);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  res.json({ revision: revisionForTrip(trip) });
 });
 
 app.post('/api/trips/:id/participants', (req, res) => {

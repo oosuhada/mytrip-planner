@@ -9,8 +9,8 @@ export type PendingMutation = {
 const DB_NAME = 'mytrip-offline';
 const MUTATION_STORE = 'mutations';
 const SNAPSHOT_STORE = 'snapshots';
-const SNAPSHOT_VERSION = 'v2';
-const PACK_CACHE = 'mytrip-offline-pack-v2';
+const SNAPSHOT_VERSION = 'v3';
+const PACK_CACHE = 'mytrip-offline-pack-v3';
 const SYNC_EVENT = 'mytrip:sync-state';
 
 export type OfflineSnapshot<T> = { key: string; value: T; updated_at: number };
@@ -85,6 +85,8 @@ export async function writeOfflineSnapshot<T>(key: string, value: T): Promise<Of
 
 export const readTripSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`trip:${SNAPSHOT_VERSION}:${tripId}`);
 export const writeTripSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`trip:${SNAPSHOT_VERSION}:${tripId}`, value);
+export const readTripRevision = (tripId: string) => readOfflineSnapshot<string>(`trip-revision:${SNAPSHOT_VERSION}:${tripId}`);
+export const writeTripRevision = (tripId: string, value: string) => writeOfflineSnapshot(`trip-revision:${SNAPSHOT_VERSION}:${tripId}`, value);
 export const readWeatherSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`weather:${SNAPSHOT_VERSION}:${tripId}`);
 export const writeWeatherSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`weather:${SNAPSHOT_VERSION}:${tripId}`, value);
 export const readOfflinePackInfo = (tripId: string) => readOfflineSnapshot<OfflinePackInfo>(`pack:${SNAPSHOT_VERSION}:${tripId}`);

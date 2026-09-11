@@ -1,5 +1,5 @@
-const CACHE = 'mytrip-2026-v8';
-const PACK_CACHE = 'mytrip-offline-pack-v2';
+const CACHE = 'mytrip-2026-v9';
+const PACK_CACHE = 'mytrip-offline-pack-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
