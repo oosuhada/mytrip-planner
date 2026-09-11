@@ -1,5 +1,7 @@
 # MyTrip responsive UI acceptance rules
 
+Visual tokens, IA, typography, color, surfaces, and per-page hierarchy live in `docs/MYTRIP_DESIGN_SYSTEM.md`. This file remains the engineering acceptance checklist for responsive and offline behavior.
+
 This project treats visual verification as part of implementation, not as a final polish pass.
 
 ## Principles
@@ -44,6 +46,7 @@ This project treats visual verification as part of implementation, not as a fina
 
 - One primary content column.
 - Full-screen Assistant.
+- Header control geometry is a hard acceptance rule: menu, mode and add controls are 44x44px; the weather control is exactly 44px high; action-to-action gaps are 8px; header outer gutters are 14px. Verify the actual `getBoundingClientRect()` values rather than judging alignment by screenshot alone.
 - Header controls and field actions: touch target >= 44px where practical.
 - Schedule `날짜별`: exactly one day at full available width.
 - Schedule `전체보기`: intentional horizontal day browsing, about 88vw per day.
