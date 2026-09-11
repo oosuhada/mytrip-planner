@@ -447,8 +447,11 @@ if (process.env.NODE_ENV === 'production') {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(dist, 'sw.js'));
   });
-  app.use(express.static(dist, { maxAge: '1h' }));
-  app.get('*splat', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  app.use(express.static(dist, { maxAge: '1h', index: false }));
+  app.get('*splat', (_req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.sendFile(path.join(dist, 'index.html'));
+  });
 }
 
 server.listen(port, '0.0.0.0', () => console.log(`MyTrip listening on http://0.0.0.0:${port}`));
