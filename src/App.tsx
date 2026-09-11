@@ -260,21 +260,31 @@ function TripPage({ tripId }: { tripId: string }) {
         <ModeSwitcher mode={workspaceMode} onSelect={selectMode} />
         <nav>
           {workspaceMode === 'plan' ? <>
-            <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="준비 · 예약" onClick={() => selectTab('guide')} />
-            <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
-            <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정 편집" onClick={() => selectTab('schedule')} />
-            <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 결정" onClick={() => selectTab('votes')} count={trip.places.length} />
-            <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 리서치" onClick={() => selectTab('map')} />
-            <NavButton active={tab === 'packing'} icon={<Luggage />} label="짐 · 코디" onClick={() => selectTab('packing')} />
-            <NavButton active={tab === 'inbox'} icon={<Import />} label="AI 가져오기" onClick={() => selectTab('inbox')} />
+            <NavGroup label="준비">
+              <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="준비 · 예약" onClick={() => selectTab('guide')} />
+              <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
+              <NavButton active={tab === 'packing'} icon={<Luggage />} label="짐 · 코디" onClick={() => selectTab('packing')} />
+            </NavGroup>
+            <NavGroup label="계획">
+              <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정 편집" onClick={() => selectTab('schedule')} />
+              <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 결정" onClick={() => selectTab('votes')} count={trip.places.length} />
+              <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 리서치" onClick={() => selectTab('map')} />
+            </NavGroup>
+            <NavGroup label="도구">
+              <NavButton active={tab === 'inbox'} icon={<Import />} label="AI 가져오기" onClick={() => selectTab('inbox')} />
+            </NavGroup>
           </> : <>
-            <NavButton active={tab === 'today'} icon={<Navigation />} label="오늘" onClick={() => selectTab('today')} />
-            <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="전체 일정" onClick={() => selectTab('schedule')} />
-            <NavButton active={tab === 'trip-weather'} icon={<CloudRain />} label="날씨 · 오늘의 코디" onClick={() => selectTab('trip-weather')} />
-            <NavButton active={tab === 'phrases'} icon={<MessageCircle />} label="일본어 표현" onClick={() => selectTab('phrases')} />
-            <NavButton active={tab === 'shopping-guide'} icon={<ShoppingBag />} label="쇼핑 리스트" onClick={() => selectTab('shopping-guide')} />
-            <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
-            <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
+            <NavGroup label="여행 중">
+              <NavButton active={tab === 'today'} icon={<Navigation />} label="오늘" onClick={() => selectTab('today')} />
+              <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="전체 일정" onClick={() => selectTab('schedule')} />
+              <NavButton active={tab === 'trip-weather'} icon={<CloudRain />} label="날씨 · 오늘의 코디" onClick={() => selectTab('trip-weather')} />
+            </NavGroup>
+            <NavGroup label="현장 도구">
+              <NavButton active={tab === 'phrases'} icon={<MessageCircle />} label="일본어 표현" onClick={() => selectTab('phrases')} />
+              <NavButton active={tab === 'shopping-guide'} icon={<ShoppingBag />} label="쇼핑 리스트" onClick={() => selectTab('shopping-guide')} />
+              <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
+              <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
+            </NavGroup>
           </>}
         </nav>
         <div className="sidebar-bottom">
@@ -398,33 +408,28 @@ function NavButton({ active, icon, label, onClick, count }: { active: boolean; i
   return <button className={`nav-btn ${active ? 'active' : ''}`} onClick={onClick}>{icon}<span>{label}</span>{typeof count === 'number' && <b>{count}</b>}</button>;
 }
 
+function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="nav-group"><span className="nav-group-label">{label}</span><div className="nav-group-items">{children}</div></div>;
+}
+
 function ModeSwitcher({ mode, onSelect }: { mode: WorkspaceMode; onSelect: (mode: WorkspaceMode) => void }) {
   return <div className="mode-switcher" aria-label="여행 모드 선택"><button className={mode === 'plan' ? 'active' : ''} onClick={() => onSelect('plan')}><span>PLAN</span><small>여행 전</small></button><button className={mode === 'trip' ? 'active' : ''} onClick={() => onSelect('trip')}><span>TRIP</span><small>여행 중</small></button></div>;
 }
 
 function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void }) {
-  const items: Array<[Tab, React.ReactNode, string, number?]> = mode === 'plan' ? [
-    ['guide', <ClipboardCheck/>, '준비 · 예약'],
-    ['budget', <Wallet/>, '예산 · 지출'],
-    ['schedule', <CalendarDays/>, '일정 편집'],
-    ['votes', <Vote/>, '후보 · 결정', trip.places.length],
-    ['map', <Compass/>, '지도 · 리서치'],
-    ['packing', <Luggage/>, '짐 · 코디'],
-    ['inbox', <Import/>, 'AI 가져오기'],
+  const groups: Array<{ label: string; items: Array<[Tab, React.ReactNode, string, number?]> }> = mode === 'plan' ? [
+    { label: '준비', items: [['guide', <ClipboardCheck/>, '준비 · 예약'], ['budget', <Wallet/>, '예산 · 지출'], ['packing', <Luggage/>, '짐 · 코디']] },
+    { label: '계획', items: [['schedule', <CalendarDays/>, '일정 편집'], ['votes', <Vote/>, '후보 · 결정', trip.places.length], ['map', <Compass/>, '지도 · 리서치']] },
+    { label: '도구', items: [['inbox', <Import/>, 'AI 가져오기']] },
   ] : [
-    ['today', <Navigation/>, '오늘'],
-    ['schedule', <CalendarDays/>, '전체 일정'],
-    ['trip-weather', <CloudRain/>, '날씨 · 오늘의 코디'],
-    ['phrases', <MessageCircle/>, '일본어 표현'],
-    ['shopping-guide', <ShoppingBag/>, '쇼핑 리스트'],
-    ['budget', <Wallet/>, '예산 · 지출'],
-    ['map', <MapPin/>, '지도'],
+    { label: '여행 중', items: [['today', <Navigation/>, '오늘'], ['schedule', <CalendarDays/>, '전체 일정'], ['trip-weather', <CloudRain/>, '날씨 · 오늘의 코디']] },
+    { label: '현장 도구', items: [['phrases', <MessageCircle/>, '일본어 표현'], ['shopping-guide', <ShoppingBag/>, '쇼핑 리스트'], ['budget', <Wallet/>, '예산 · 지출'], ['map', <MapPin/>, '지도']] },
   ];
   return <div className="mobile-menu-backdrop" onMouseDown={onClose}>
     <aside className="mobile-menu-drawer" onMouseDown={(event) => event.stopPropagation()}>
       <header><div><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><small>{formatDateRange(trip.start_date, trip.end_date)}</small></div></div><button onClick={onClose} aria-label="메뉴 닫기"><X size={22}/></button></header>
       <ModeSwitcher mode={mode} onSelect={onSelectMode} />
-      <nav>{items.map(([key, icon, label, count]) => <NavButton key={key} active={tab === key} icon={icon} label={label} count={count} onClick={() => onSelect(key)} />)}</nav>
+      <nav>{groups.map((group) => <NavGroup key={group.label} label={group.label}>{group.items.map(([key, icon, label, count]) => <NavButton key={key} active={tab === key} icon={icon} label={label} count={count} onClick={() => onSelect(key)} />)}</NavGroup>)}</nav>
       <footer><label className="planner-name"><Users size={16}/><input value={plannerName} onChange={(event) => onNameChange(event.target.value)} aria-label="내 이름" /></label><span>실시간 공동 편집</span></footer>
     </aside>
   </div>;

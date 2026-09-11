@@ -1,5 +1,7 @@
 # MyTrip responsive UI acceptance rules
 
+Visual tokens, IA, typography, color, surfaces, and per-page hierarchy live in `docs/MYTRIP_DESIGN_SYSTEM.md`. This file remains the engineering acceptance checklist for responsive and offline behavior.
+
 This project treats visual verification as part of implementation, not as a final polish pass.
 
 ## Principles
