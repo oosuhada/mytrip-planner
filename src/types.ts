@@ -30,6 +30,7 @@ export type TripEvent = {
   image_url?: string | null;
   image_source_url?: string | null;
   completed_at?: string | null;
+  event_status?: 'PLANNED' | 'DONE' | 'SKIPPED' | 'CANCELLED' | string;
 };
 
 export type Place = {
@@ -163,6 +164,14 @@ export type DecisionOption = {
   route?: string | null;
   map_url?: string | null;
   source_url?: string | null;
+  event_title?: string | null;
+  event_kind?: string | null;
+  event_start_time?: string | null;
+  event_end_time?: string | null;
+  event_location?: string | null;
+  event_notes?: string | null;
+  event_meta?: Record<string, unknown>;
+  hidden_event_ids?: string[];
   recommended: number;
   sort_order: number;
 };
@@ -196,4 +205,5 @@ export type Trip = TripSummary & {
 };
 
 export type WeatherDay = { date: string; code: number; max: number; min: number; rain: number };
+export type WeatherHour = { time: string; code: number; temp: number; rain: number };
 export type SearchPlace = { name: string; address: string; lat: number; lng: number; category: string; provider: string };

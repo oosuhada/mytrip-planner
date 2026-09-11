@@ -65,8 +65,16 @@ app.post('/api/trips/:id/events', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: 'Event not found' });
-  const allowed = ['title', 'kind', 'date', 'start_time', 'end_time', 'location', 'address', 'lat', 'lng', 'notes', 'sort_order', 'completed_at'];
-  const updates = Object.entries(req.body).filter(([key]) => allowed.includes(key));
+  const allowed = ['title', 'kind', 'date', 'start_time', 'end_time', 'location', 'address', 'lat', 'lng', 'notes', 'sort_order', 'completed_at', 'event_status'];
+  const body = { ...req.body } as Record<string, unknown>;
+  if (typeof body.event_status === 'string') {
+    const status = ['PLANNED', 'DONE', 'SKIPPED', 'CANCELLED'].includes(body.event_status) ? body.event_status : 'PLANNED';
+    body.event_status = status;
+    body.completed_at = status === 'DONE' ? (existing.completed_at || new Date().toISOString()) : null;
+  } else if ('completed_at' in body) {
+    body.event_status = body.completed_at ? 'DONE' : 'PLANNED';
+  }
+  const updates = Object.entries(body).filter(([key]) => allowed.includes(key));
   if (!updates.length) return res.json({ ok: true });
   const set = updates.map(([key]) => `${key} = ?`).join(', ');
   db.prepare(`UPDATE events SET ${set}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...updates.map(([, value]) => value), req.params.id);
@@ -170,6 +178,7 @@ app.get('/api/weather', async (req, res) => {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', String(lat)); url.searchParams.set('longitude', String(lng));
   url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
+  url.searchParams.set('hourly', 'weather_code,temperature_2m,precipitation_probability');
   url.searchParams.set('timezone', 'auto');
   if (start) url.searchParams.set('start_date', start); if (end) url.searchParams.set('end_date', end);
   try {
@@ -178,7 +187,10 @@ app.get('/api/weather', async (req, res) => {
     const daily = (json.daily?.time || []).map((date: string, i: number) => ({
       date, code: json.daily.weather_code[i], max: json.daily.temperature_2m_max[i], min: json.daily.temperature_2m_min[i], rain: json.daily.precipitation_probability_max[i],
     }));
-    res.json({ timezone: json.timezone, daily });
+    const hourly = (json.hourly?.time || []).map((time: string, i: number) => ({
+      time, code: json.hourly.weather_code[i], temp: json.hourly.temperature_2m[i], rain: json.hourly.precipitation_probability[i],
+    }));
+    res.json({ timezone: json.timezone, daily, hourly });
   } catch (error) { res.status(502).json({ error: String(error) }); }
 });
 
@@ -195,11 +207,11 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
     trip: { title: trip.title, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date },
     travelers: (trip.participants || []).map((person: any) => person.name),
     rules: (trip.guides || []).filter((guide: any) => guide.section === 'rules').map((guide: any) => ({ title: guide.title, details: guide.details })),
-    itinerary: (trip.events || []).map((event: any) => ({ date: event.date, start: event.start_time, end: event.end_time, title: event.title, kind: event.kind, location: event.location, notes: event.notes, source: event.source, completed_at: event.completed_at || null, meta: event.meta })),
+    itinerary: (trip.events || []).map((event: any) => ({ id: event.id, date: event.date, start: event.start_time, end: event.end_time, title: event.title, kind: event.kind, location: event.location, notes: event.notes, source: event.source, status: event.event_status || (event.completed_at ? 'DONE' : 'PLANNED'), completed_at: event.completed_at || null, meta: event.meta })),
     meals: (trip.meal_slots || []).map((slot: any) => ({
-      date: slot.date, time: slot.time, label: slot.label, area: slot.area, is_scheduled: Boolean(slot.event_id),
-      selected: slot.selected_restaurant_id ? (restaurants.get(slot.selected_restaurant_id) as any)?.name : null,
-      options: (slot.option_ids || []).map((id: string) => restaurants.get(id)).filter(Boolean).map((restaurant: any) => ({ name: restaurant.name, city: restaurant.city, hours: restaurant.hours, budget: restaurant.price_range, reservation: restaurant.reservation_status, notes: restaurant.notes, dietary: restaurant.dietary_notes })),
+      id: slot.id, date: slot.date, time: slot.time, label: slot.label, area: slot.area, is_scheduled: Boolean(slot.event_id),
+      selected_restaurant_id: slot.selected_restaurant_id || null, selected: slot.selected_restaurant_id ? (restaurants.get(slot.selected_restaurant_id) as any)?.name : null,
+      options: (slot.option_ids || []).map((id: string) => restaurants.get(id)).filter(Boolean).map((restaurant: any) => ({ id: restaurant.id, name: restaurant.name, city: restaurant.city, hours: restaurant.hours, budget: restaurant.price_range, reservation: restaurant.reservation_status, notes: restaurant.notes, dietary: restaurant.dietary_notes })),
     })),
     candidates: (trip.places || []).map((place: any) => ({ name: place.name, category: place.category, votes: place.vote_score, notes: place.notes, region: place.research?.region, suggested_dates: place.research?.suggested_dates, best_time: place.research?.best_time, research_note: place.research?.note })),
     checklist: (trip.checklist || []).map((item: any) => ({ title: item.title, category: item.category, status: item.status, notes: item.notes })),
@@ -209,9 +221,10 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
     },
     decisions: (trip.options || []).map((option: any) => ({ group: option.group_title, name: option.name, price: option.price, fit: option.fit, verdict: option.verdict, recommended: Boolean(option.recommended) })),
     day_decisions: (trip.decision_slots || []).map((slot: any) => ({
-      date: slot.date, time: slot.time, region: slot.region, type: slot.section_type, title: slot.title,
+      id: slot.id, date: slot.date, time: slot.time, region: slot.region, type: slot.section_type, title: slot.title,
       selected: (slot.options || []).find((option: any) => option.id === slot.selected_option_id)?.label || null,
-      options: (slot.options || []).map((option: any) => ({ label: option.label, price: option.price, duration: option.duration, route: option.route, recommended: Boolean(option.recommended) })),
+      selected_option_id: slot.selected_option_id || null,
+      options: (slot.options || []).map((option: any) => ({ id: option.id, label: option.label, price: option.price, duration: option.duration, route: option.route, recommended: Boolean(option.recommended) })),
     })),
   };
   const history = Array.isArray(req.body.history) ? req.body.history.slice(-8).map((item: any) => ({ role: item.role === 'assistant' ? 'assistant' : 'user', content: String(item.content || '').slice(0, 1500) })) : [];
@@ -331,6 +344,7 @@ app.patch('/api/meal-slots/:id/select', (req, res) => {
   const restaurantId = String(req.body.restaurant_id || '');
   const valid = db.prepare('SELECT 1 FROM meal_slot_options WHERE meal_slot_id = ? AND restaurant_id = ?').get(req.params.id, restaurantId);
   if (!valid) return res.status(400).json({ error: 'Restaurant is not an option for this meal slot' });
+  if (slot.selected_restaurant_id === restaurantId) return res.json({ ok: true, selected_restaurant_id: restaurantId, unchanged: true });
   const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurantId) as any;
   if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
   const linked = db.prepare(`
@@ -340,7 +354,7 @@ app.patch('/api/meal-slots/:id/select', (req, res) => {
   const transaction = db.transaction(() => {
     db.prepare('UPDATE meal_slots SET selected_restaurant_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(restaurantId, req.params.id);
     if (slot.event_id) {
-      db.prepare(`UPDATE events SET title = ?, location = ?, address = ?, lat = ?, lng = ?, notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      db.prepare(`UPDATE events SET title = ?, location = ?, address = ?, lat = ?, lng = ?, notes = ?, event_status = 'PLANNED', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
         .run(restaurant.name, restaurant.name, linked?.address || null, linked?.lat ?? null, linked?.lng ?? null,
           [restaurant.notes, restaurant.dietary_notes].filter(Boolean).join(' · '), slot.event_id);
     }
@@ -357,12 +371,13 @@ app.patch('/api/decision-slots/:id/select', (req, res) => {
   const optionId = String(req.body.option_id || '');
   const option = db.prepare('SELECT * FROM decision_options WHERE id = ? AND decision_slot_id = ?').get(optionId, req.params.id) as any;
   if (!option) return res.status(400).json({ error: 'Option is not valid for this decision slot' });
+  if (slot.selected_option_id === optionId) return res.json({ ok: true, selected_option_id: optionId, unchanged: true });
   const transaction = db.transaction(() => {
     db.prepare('UPDATE decision_slots SET selected_option_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(optionId, req.params.id);
     if (slot.event_id && option.event_title) {
       db.prepare(`UPDATE events SET
         title = ?, kind = COALESCE(?, kind), start_time = COALESCE(?, start_time), end_time = COALESCE(?, end_time),
-        location = COALESCE(?, location), notes = COALESCE(?, notes), meta_json = ?, updated_at = CURRENT_TIMESTAMP
+        location = COALESCE(?, location), notes = COALESCE(?, notes), meta_json = ?, event_status = 'PLANNED', completed_at = NULL, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`)
         .run(option.event_title, option.event_kind || null, option.event_start_time || null, option.event_end_time || null,
           option.event_location || null, option.event_notes || null, option.event_meta_json || '{}', slot.event_id);

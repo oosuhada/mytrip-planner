@@ -11,6 +11,11 @@ This project treats visual verification as part of implementation, not as a fina
 - Prefer container-relative sizing (`minmax`, `clamp`, percentages, container queries where useful) over hard-coded desktop card widths.
 - A control that matters in the field should target roughly 44 CSS px on touch layouts. Never rely on hover for critical actions.
 - PLAN optimizes for comparison/editing. TRIP optimizes for immediate action and one-handed scanning.
+- TRIP state is explicit: `PLANNED -> DONE | SKIPPED | CANCELLED`. Resolved events must not remain the current/next action, and changing a meal or Plan B resets the linked event to `PLANNED`.
+- TRIP preview is read-only for execution state. Future events cannot be accidentally marked done/skipped before the trip begins.
+- Field-critical PATCH actions are offline-first: apply optimistically, queue locally, expose pending-sync state, and replay when connectivity returns.
+- Use progressive disclosure for long operational flows. Group consecutive transport steps into one journey card and keep the full step list collapsed until requested.
+- In the final three days before departure, surface blocking/urgent preparation and `RESERVE NOW` work above the full checklist.
 - Long information sets use `overview -> category/choice -> detail`. Do not render every category expanded by default just because the data is grouped.
 - Secondary TRIP information that competes for the same moment should use a local switcher/segmented view instead of stacking multiple long sections vertically.
 - Contextual actions should deep-link to the relevant detail state when possible. Example: a meal card opens restaurant Japanese; a transport card opens transport Japanese.
@@ -60,6 +65,11 @@ For a responsive change, also smoke-test an intermediate width around 1024–118
 - Every rendered count must correspond to content the user can actually reach.
 - Drag-only actions need a simple pointer/tap alternative when the action is important during travel.
 - Completion/progress states must represent explicit user state. Time-based inference may be shown only as secondary context and must not masquerade as completion.
+- Preview mode must not mutate trip-execution state.
+- Test field-critical PATCH controls with the browser fully offline, then restore connectivity and verify the queued change reaches SQLite exactly once.
+- Changing the selected meal or decision option must clear stale completion state on its linked event.
+- Current/next calculations must ignore `DONE`, `SKIPPED`, and `CANCELLED` events.
+- Weather advice that can alter a route should use the next action's hourly window and a date-appropriate location rather than only the trip-wide daily maximum.
 
 ## References
 

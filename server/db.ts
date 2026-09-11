@@ -291,6 +291,8 @@ ensureColumn('packing_items', 'weight_kg', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('packing_items', 'source', "TEXT NOT NULL DEFAULT 'manual'");
 ensureColumn('place_research', 'image_url', 'TEXT');
 ensureColumn('events', 'completed_at', 'TEXT');
+ensureColumn('events', 'event_status', "TEXT NOT NULL DEFAULT 'PLANNED'");
+db.exec("UPDATE events SET event_status = 'DONE' WHERE completed_at IS NOT NULL AND event_status = 'PLANNED'");
 
 export const id = () => crypto.randomUUID();
 
