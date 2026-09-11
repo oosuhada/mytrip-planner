@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
   AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
 } from 'lucide-react';
-import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripRevision, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripRevision, writeTripSnapshot, writeWeatherSnapshot } from './api';
+import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, clearOfflineTripData, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripRevision, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripRevision, writeTripSnapshot, writeWeatherSnapshot } from './api';
 import type { OfflinePackInfo } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay, WeatherHour } from './types';
 
@@ -91,7 +91,7 @@ function HomePage() {
 }
 
 type WorkspaceMode = 'plan' | 'trip';
-type Tab = 'today' | 'trip-weather' | 'phrases' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type Tab = 'today' | 'trip-weather' | 'phrases' | 'shopping-guide' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 type TripPhraseCategoryId = 'all' | 'restaurant' | 'diet' | 'transport' | 'hotel' | 'shopping' | 'help' | 'airport' | 'convenience' | 'sightseeing' | 'health' | 'emergency';
 type TripEventStatus = 'PLANNED' | 'DONE' | 'SKIPPED' | 'CANCELLED';
 type TripLiveGroup = { id: string; title: string; events: TripEvent[] };
@@ -202,6 +202,18 @@ function TripPage({ tripId }: { tripId: string }) {
     } finally { setOfflinePacking(false); }
   }
 
+  async function resetOfflineData() {
+    if (!trip || !navigator.onLine) return;
+    if (!window.confirm('이 기기의 여행 스냅샷과 오프라인 팩을 지우고 서버에서 다시 받을까요? 동기화 대기 중인 변경사항은 지우지 않습니다.')) return;
+    setOfflinePackError('');
+    await clearOfflineTripData(trip.id);
+    setOfflinePack(null);
+    setWeather([]);
+    setWeatherHours([]);
+    await load(true);
+    await loadWeather(trip, true).catch(() => undefined);
+  }
+
   useEffect(() => {
     if (!trip || initialTabResolved.current) return;
     initialTabResolved.current = true;
@@ -247,6 +259,7 @@ function TripPage({ tripId }: { tripId: string }) {
             <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="전체 일정" onClick={() => selectTab('schedule')} />
             <NavButton active={tab === 'trip-weather'} icon={<CloudRain />} label="날씨 · 오늘의 코디" onClick={() => selectTab('trip-weather')} />
             <NavButton active={tab === 'phrases'} icon={<MessageCircle />} label="일본어 표현" onClick={() => selectTab('phrases')} />
+            <NavButton active={tab === 'shopping-guide'} icon={<ShoppingBag />} label="쇼핑 리스트" onClick={() => selectTab('shopping-guide')} />
             <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
           </>}
         </nav>
@@ -260,12 +273,13 @@ function TripPage({ tripId }: { tripId: string }) {
 
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
-        <OfflinePackBar info={offlinePack} saving={offlinePacking} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} />
+        <OfflinePackBar info={offlinePack} saving={offlinePacking} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
         {(!syncState.online || syncState.pending > 0 || syncState.failed) && <div className={`sync-status-bar ${syncState.online ? 'syncing' : 'offline'}`}><span>{syncState.online ? <RefreshCw size={14}/> : <WifiOff size={14}/>}<b>{syncState.online ? (syncState.failed ? '동기화 재시도 필요' : '변경 동기화 중') : '오프라인'}</b>{syncState.pending > 0 && <em>{syncState.pending}개 변경 대기</em>}</span><small>{syncState.online ? '연결된 상태에서 자동 저장합니다.' : '일정 변경은 이 기기에 저장하고 연결되면 자동 반영합니다.'}</small></div>}
         <div className="content-area">
           {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} weatherHours={weatherHours} reload={reload} onOpenTab={selectTab} />}
           {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
+          {workspaceMode === 'trip' && tab === 'shopping-guide' && <TripShoppingGuidePanel trip={trip} />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={reload} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={reload} tripMode={workspaceMode === 'trip'} />}
           {tab === 'map' && (workspaceMode === 'trip' ? <TripFieldMapPanel trip={trip} online={syncState.online} /> : <DiscoverPanel trip={trip} plannerName={plannerName} reload={reload} />)}
@@ -386,6 +400,7 @@ function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelect
     ['schedule', <CalendarDays/>, '전체 일정'],
     ['trip-weather', <CloudRain/>, '날씨 · 오늘의 코디'],
     ['phrases', <MessageCircle/>, '일본어 표현'],
+    ['shopping-guide', <ShoppingBag/>, '쇼핑 리스트'],
     ['map', <MapPin/>, '지도'],
   ];
   return <div className="mobile-menu-backdrop" onMouseDown={onClose}>
@@ -413,13 +428,13 @@ function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { 
   </header>;
 }
 
-function OfflinePackBar({ info, saving, online, error, onSave }: { info: OfflinePackInfo | null; saving: boolean; online: boolean; error: string; onSave: () => void }) {
+function OfflinePackBar({ info, saving, online, error, onSave, onReset }: { info: OfflinePackInfo | null; saving: boolean; online: boolean; error: string; onSave: () => void; onReset: () => void }) {
   const stale = Boolean(info && Date.now() - info.saved_at > 12 * 60 * 60 * 1000);
   const savedAt = info ? new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(info.saved_at)) : '';
   const storage = info?.storage_bytes ? formatBytes(info.storage_bytes) : null;
   return <div className={`offline-pack-bar ${info ? 'ready' : 'empty'} ${!online ? 'offline' : ''} ${error ? 'error' : ''}`}>
     <div className="offline-pack-copy"><span className="offline-pack-icon">{error ? <AlertTriangle size={16}/> : info ? <Check size={16}/> : <Download size={16}/>}</span><span><strong>{error ? '오프라인 저장 확인 필요' : info ? '오프라인 사용 준비됨' : '여행 전체 오프라인 저장'}</strong><small>{error || (info ? `앱 · 일정 · 일본어 · ${info.weather_saved ? '날씨' : '날씨 제외'} · 좌표 기반 오프라인 동선 지도 저장` : 'Wi-Fi에서 한 번 저장하면 일본에서 데이터 없이 핵심 화면을 열 수 있습니다.')}</small></span></div>
-    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button></div>
+    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button><button className="offline-reset" onClick={onReset} disabled={!online || saving} title="이 기기의 저장된 여행 데이터만 지우고 서버에서 다시 받기"><RefreshCw size={13}/>로컬 데이터 초기화</button></div>
   </div>;
 }
 
@@ -600,6 +615,41 @@ function TripJourneyCard({ group, active, now, nextEventId, onSetStatus }: { gro
     <details className="trip-journey-details"><summary>전체 {group.events.length}단계 보기 <ChevronRight size={14}/></summary><div className="trip-journey-steps">{group.events.map((event, index) => { const status = tripEventStatus(event); return <div className={`trip-journey-step status-${status.toLowerCase()}`} key={event.id}><span className="journey-step-index">{index + 1}</span><div><b>{event.start_time || '--:--'}</b><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}</div><span className="journey-step-actions"><button disabled={!active} className={status === 'DONE' ? 'done' : ''} onClick={() => onSetStatus(event, 'DONE')} aria-label={`${event.title} 완료`}><Check size={13}/></button><button disabled={!active} className={status === 'SKIPPED' ? 'skip-active' : ''} onClick={() => onSetStatus(event, 'SKIPPED')} aria-label={`${event.title} 건너뜀`}><FastForward size={12}/></button></span></div>; })}</div></details>
     {mapUrl && <a className="trip-journey-map" href={mapUrl} target="_blank" rel="noreferrer"><Navigation size={14}/>이 이동 전체 길찾기</a>}
   </article>;
+}
+
+const tripShoppingItems = [
+  { id: 'kitkat-matcha', category: '과자 · 선물', name: 'KitKat 진한 말차 10매', price: '목표 ¥350–550', buy: '드럭스토어 · 대형 편의점 · 돈키 계열', note: '¥550 이하면 무난. 여름에는 초콜릿이 녹을 수 있어 여행 마지막 날 가까이 구매.', image: null, source: 'https://kitkat.nestle.jp/products/kitkat-matcha-green-tea' },
+  { id: 'jagarico', category: '편의점 간식', name: 'Calbee じゃがりこ', price: '목표 ¥150–220 / 컵', buy: 'FamilyMart · 편의점', note: '샐러드/치즈 계열 기본맛 우선. 부피가 커서 선물용 대량 구매보다는 현지 간식용.', image: 'https://www.calbee.co.jp/jagarico/assets/images/ogp.png', source: 'https://www.calbee.co.jp/jagarico/' },
+  { id: 'pocky', category: '과자 · 선물', name: 'Pocky · 일본 한정/계절맛', price: '목표 ¥180–300 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '기본맛보다 계절/지역 한정이 보이면 1–2개만. ¥300을 크게 넘으면 기념품점 프리미엄 가능성.', image: 'https://www.glico.com/assets/images/original/pocky_2026KV%EF%BC%88%E3%82%B9%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E6%A1%88%EF%BC%89%20%281%29.jpg', source: 'https://www.glico.com/jp/product/chocolate/pocky/' },
+  { id: 'alfort', category: '과자 · 선물', name: 'Bourbon Alfort Mini', price: '목표 ¥150–250 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '가격 대비 나눠주기 좋은 초콜릿 과자. 여러 맛을 조금씩 섞어 사기 좋음.', image: 'https://www.bourbon.co.jp/product_file/file/36079-01%E3%82%A2%E3%83%AB%E3%83%95%E3%82%A9%E3%83%BC%E3%83%88%28SSS%29_%E7%AB%8B%E4%BD%93%EF%BC%88%E3%83%81%E3%83%A7%E3%82%B3%E3%83%AC%E3%83%BC%E3%83%88%E8%89%B2%E5%A4%89%E6%9B%B4%EF%BC%89-s.jpg', source: 'https://www.bourbon.co.jp/' },
+  { id: 'melanocc', category: '드럭스토어', name: 'Melano CC 프리미엄 미용액 20mL', price: '기준가 ¥1,628', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '공식 온라인 정가가 ¥1,628. 면세/매장 할인 후 이보다 내려가면 좋은 편.', image: 'https://jp.rohto.com/-/media/com/melanocc/20250828/assets/img/ogp_top.png?sc_lang=ja-jp', source: 'https://www.shop.rohto.co.jp/category/skincare/melanocc/168583.html' },
+  { id: 'bioreuv', category: '드럭스토어', name: 'Biore UV Aqua Rich', price: '목표 ¥800–1,100', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '일상용 선크림 후보. 대용량/기획세트는 단위 용량 가격을 비교.', image: 'https://www.kao.co.jp/content/dam/sites/kao/www-kao-co-jp/bioreuv/cmn/share_bioreuv.jpg', source: 'https://www.kao.co.jp/bioreuv/' },
+];
+
+function ShoppingItemPhoto({ item }: { item: typeof tripShoppingItems[number] }) {
+  const [failed, setFailed] = useState(false);
+  if (!item.image || failed) return <div className="shopping-item-photo fallback"><ShoppingBag size={24}/><span>{item.category}</span></div>;
+  return <div className="shopping-item-photo"><img src={item.image} alt={item.name} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)}/></div>;
+}
+
+function TripShoppingGuidePanel({ trip }: { trip: Trip }) {
+  const [bought, setBought] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('mytrip-shopping-bought') || '[]')); } catch { return new Set(); }
+  });
+  const shoppingEvents = trip.events.filter((event) => ['2026-09-15', '2026-09-16'].includes(event.date) && /Animate|Surugaya|Den Den|FamilyMart|Matsumoto|쇼핑|간식/i.test(`${event.title} ${event.location || ''}`)).sort((a, b) => `${a.date} ${a.start_time || ''}`.localeCompare(`${b.date} ${b.start_time || ''}`));
+  function toggleBought(id: string) {
+    setBought((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      localStorage.setItem('mytrip-shopping-bought', JSON.stringify([...next]));
+      return next;
+    });
+  }
+  return <div className="shopping-guide-page">
+    <section className="trip-tool-intro shopping-guide-hero"><div><p className="eyebrow">OSAKA SHOPPING RUN</p><h2>오사카에서 몰아서 사고, 교토에서는 가볍게.</h2><p>덴덴타운 애니 굿즈 → 편의점 간식 → 마지막 밤 드럭스토어 순으로 묶었습니다. 가격은 여행 중 판단용 목표 범위입니다.</p></div><div className="shopping-progress"><strong>{bought.size}/{tripShoppingItems.length}</strong><span>구매 체크</span></div></section>
+    <section className="shopping-route-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">IN THE ITINERARY</p><h3>실제 일정에 넣은 쇼핑</h3></span></div><b>9/15–16 · Osaka</b></div><div className="shopping-route-list">{shoppingEvents.map((event) => <article key={event.id}><span>{formatMonthDay(event.date)} · {event.start_time || '--:--'}</span><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}{googleMapsEventUrl(event) && <a href={googleMapsEventUrl(event)!} target="_blank" rel="noreferrer"><MapPin size={12}/>지도</a>}</article>)}</div></section>
+    <section className="shopping-list-section"><div className="trip-section-heading"><div><ShoppingBag/><span><p className="eyebrow">BUY LIST</p><h3>사올 만한 것 · 적정 가격대</h3></span></div><b>{tripShoppingItems.length}개 추천</b></div><div className="shopping-item-grid">{tripShoppingItems.map((item) => <article key={item.id} className={bought.has(item.id) ? 'bought' : ''}><ShoppingItemPhoto item={item}/><div className="shopping-item-copy"><span>{item.category}</span><h4>{item.name}</h4><strong>{item.price}</strong><p>{item.buy}</p><small>{item.note}</small><footer><button onClick={() => toggleBought(item.id)}><Check size={13}/>{bought.has(item.id) ? '구매 완료' : '살 것'}</button><a href={item.source} target="_blank" rel="noreferrer"><ExternalLink size={12}/>제품 보기</a></footer></div></article>)}</div><p className="shopping-price-note">가격은 매장·세일·면세 여부에 따라 달라질 수 있습니다. 특히 과자는 “이 범위 이하이면 그냥 산다”는 현장 판단용 가이드로 보세요.</p></section>
+  </div>;
 }
 
 const tripPhraseGroups = [
@@ -921,26 +971,27 @@ function ScheduleBoard({ trip, weather, reload, tripMode }: { trip: Trip; weathe
           const dayEvents = trip.events.filter((event) => event.date === date);
           const mealCount = trip.meal_slots.filter((slot) => slot.date === date && slot.selected_restaurant_id && !/optional|snack|dessert/i.test(slot.meal_type || '')).length;
           const roamCount = dayEvents.filter((event) => event.kind === 'activity' && !/입국|출국|보안|게이트|대욕장|호텔 휴식|ICN|KIX/i.test(event.title)).length;
-          return <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={dayEvents} weather={weather.find((w) => w.date === date)} mealCount={mealCount} roamCount={roamCount} reload={reload} allowCompletion={tripMode && tripIsActive} />;
+          return <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={dayEvents} mealSlots={(trip.meal_slots || []).filter((slot) => slot.date === date)} weather={weather.find((w) => w.date === date)} mealCount={mealCount} roamCount={roamCount} reload={reload} allowCompletion={tripMode && tripIsActive} />;
         })}
       </div>
     </DndContext>
   </div>;
 }
 
-function DayColumn({ date, index, active, events, weather, mealCount, roamCount, reload, allowCompletion }: { date: string; index: number; active: boolean; events: TripEvent[]; weather?: WeatherDay; mealCount: number; roamCount: number; reload: () => void; allowCompletion: boolean }) {
+function DayColumn({ date, index, active, events, mealSlots, weather, mealCount, roamCount, reload, allowCompletion }: { date: string; index: number; active: boolean; events: TripEvent[]; mealSlots: MealSlot[]; weather?: WeatherDay; mealCount: number; roamCount: number; reload: () => void; allowCompletion: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${date}` });
   const walking = events.find((event) => typeof event.meta?.daily_walking === 'string')?.meta?.daily_walking;
   const orderedEvents = [...events].sort((a, b) => compareDayEvents(a, b, events));
+  const coreMeals = mealSlots.filter((slot) => slot.event_id && !/optional|snack|dessert/i.test(slot.meal_type || '')).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   return <section className={`day-column ${active ? 'mobile-active' : ''} ${isOver ? 'drop-active' : ''}`} ref={setNodeRef} data-day-date={date}>
     <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong><small className="day-rhythm-count"><Utensils size={11}/>{mealCount}끼 <MapPin size={11}/>{roamCount}곳</small>{typeof walking === 'string' && <small className="day-walking">보행 {walking}</small>}</div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
     <div className="day-events">
-      {orderedEvents.length ? orderedEvents.map((event) => <EventCard key={event.id} event={event} reload={reload} allowCompletion={allowCompletion} />) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
+      {orderedEvents.length ? orderedEvents.map((event) => { const mealIndex = coreMeals.findIndex((slot) => slot.event_id === event.id); return <EventCard key={event.id} event={event} mealSlot={mealIndex >= 0 ? coreMeals[mealIndex] : undefined} mealNumber={mealIndex >= 0 ? mealIndex + 1 : undefined} reload={reload} allowCompletion={allowCompletion} />; }) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
     </div>
   </section>;
 }
 
-function EventCard({ event, reload, allowCompletion }: { event: TripEvent; reload: () => void; allowCompletion: boolean }) {
+function EventCard({ event, mealSlot, mealNumber, reload, allowCompletion }: { event: TripEvent; mealSlot?: MealSlot; mealNumber?: number; reload: () => void; allowCompletion: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `event:${event.id}` });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 20 } : undefined;
   const icon = event.kind === 'flight' ? <Plane /> : event.kind === 'hotel' ? <BedDouble /> : event.kind === 'train' || event.kind === 'transfer' ? <Navigation /> : <MapPin />;
@@ -965,7 +1016,7 @@ function EventCard({ event, reload, allowCompletion }: { event: TripEvent; reloa
   return <article ref={setNodeRef} style={style} className={`event-card kind-${event.kind} status-${status.toLowerCase()} ${isDragging ? 'dragging' : ''}`}>
     <button className="drag-handle" {...listeners} {...attributes}><GripVertical size={16} /></button>
     <div className="event-icon">{icon}</div>
-    <div className="event-body"><EventVisual event={event} mapUrl={mapUrl}/><div className="event-title-row"><strong>{event.title}</strong><button className="mini-delete" onClick={remove} aria-label="삭제"><Trash2 size={13} /></button></div>
+    <div className="event-body">{mealSlot && mealNumber && <div className="meal-event-badge"><Utensils size={11}/><b>{mealNumber}끼</b><span>{mealSlot.label}</span></div>}<EventVisual event={event} mapUrl={mapUrl}/><div className="event-title-row"><strong>{event.title}</strong><button className="mini-delete" onClick={remove} aria-label="삭제"><Trash2 size={13} /></button></div>
       <div className="event-time"><input className="event-time-24" type="text" inputMode="numeric" maxLength={5} value={timeDraft} placeholder="--:--" onChange={(e) => setTimeDraft(e.target.value)} onBlur={(e) => changeTime(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} aria-label={`${event.title} 시작 시간 24시간제`} />{event.end_time && <span>→ {event.end_time}</span>}{event.source === 'booking' && <span className="booking-lock">확정 예약</span>}</div>
       {allowCompletion && <div className="event-status-actions"><button className={status === 'DONE' ? 'done' : ''} onClick={() => setStatus('DONE')}><Check size={13}/>{status === 'DONE' ? '완료 취소' : '완료'}</button><button className={status === 'SKIPPED' ? 'skip-active' : ''} onClick={() => setStatus('SKIPPED')}><FastForward size={13}/>{status === 'SKIPPED' ? '건너뜀 취소' : '건너뜀'}</button><button className={status === 'CANCELLED' ? 'cancel-active' : ''} onClick={() => setStatus('CANCELLED')}><X size={13}/>{status === 'CANCELLED' ? '취소 해제' : '취소'}</button></div>}
       {event.location && (mapUrl ? <a className="event-map-link" href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={12} /><span>{event.location}</span><ExternalLink size={10}/></a> : <p><MapPin size={12} /> {event.location}</p>)}

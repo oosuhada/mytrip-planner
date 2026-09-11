@@ -91,6 +91,32 @@ export const readWeatherSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>
 export const writeWeatherSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`weather:${SNAPSHOT_VERSION}:${tripId}`, value);
 export const readOfflinePackInfo = (tripId: string) => readOfflineSnapshot<OfflinePackInfo>(`pack:${SNAPSHOT_VERSION}:${tripId}`);
 
+export async function clearOfflineTripData(tripId: string) {
+  if ('indexedDB' in globalThis) {
+    const db = await openQueueDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(SNAPSHOT_STORE, 'readwrite');
+      const store = tx.objectStore(SNAPSHOT_STORE);
+      const request = store.getAllKeys();
+      request.onsuccess = () => {
+        for (const key of request.result) {
+          const value = String(key);
+          if ((value.startsWith('trip:') || value.startsWith('trip-revision:') || value.startsWith('weather:') || value.startsWith('pack:')) && value.endsWith(`:${tripId}`)) {
+            store.delete(key);
+          }
+        }
+      };
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+  }
+  if ('caches' in globalThis) {
+    const names = await caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith('mytrip-offline-pack-') || name.startsWith('mytrip-2026-')).map((name) => caches.delete(name)));
+  }
+}
+
 async function cacheResources(cacheName: string, urls: string[]) {
   const cache = await caches.open(cacheName);
   let saved = 0;
