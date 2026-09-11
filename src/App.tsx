@@ -119,6 +119,8 @@ function TripPage({ tripId }: { tripId: string }) {
   const [syncState, setSyncState] = useState({ online: navigator.onLine, pending: 0, failed: false });
   const [offlinePack, setOfflinePack] = useState<OfflinePackInfo | null>(null);
   const [offlinePacking, setOfflinePacking] = useState(false);
+  const [offlineResetting, setOfflineResetting] = useState(false);
+  const [offlineResetMessage, setOfflineResetMessage] = useState('');
   const [offlinePackError, setOfflinePackError] = useState('');
 
   const load = useCallback(async (forceNetwork = false) => {
@@ -191,6 +193,7 @@ function TripPage({ tripId }: { tripId: string }) {
   async function saveOfflinePack() {
     if (!trip || offlinePacking || !navigator.onLine) return;
     setOfflinePacking(true);
+    setOfflineResetMessage('');
     setOfflinePackError('');
     try {
       if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
@@ -203,15 +206,24 @@ function TripPage({ tripId }: { tripId: string }) {
   }
 
   async function resetOfflineData() {
-    if (!trip || !navigator.onLine) return;
+    if (!trip || !navigator.onLine || offlineResetting) return;
     if (!window.confirm('이 기기의 여행 스냅샷과 오프라인 팩을 지우고 서버에서 다시 받을까요? 동기화 대기 중인 변경사항은 지우지 않습니다.')) return;
+    setOfflineResetting(true);
+    setOfflineResetMessage('');
     setOfflinePackError('');
-    await clearOfflineTripData(trip.id);
-    setOfflinePack(null);
-    setWeather([]);
-    setWeatherHours([]);
-    await load(true);
-    await loadWeather(trip, true).catch(() => undefined);
+    try {
+      await clearOfflineTripData(trip.id);
+      setOfflinePack(null);
+      setWeather([]);
+      setWeatherHours([]);
+      await load(true);
+      await loadWeather(trip, true);
+      setOfflineResetMessage('로컬 데이터 초기화 완료 · 서버 최신 일정으로 다시 불러왔습니다.');
+    } catch (error) {
+      setOfflinePackError(error instanceof Error ? error.message : '로컬 데이터를 초기화하지 못했습니다.');
+    } finally {
+      setOfflineResetting(false);
+    }
   }
 
   useEffect(() => {
@@ -273,7 +285,7 @@ function TripPage({ tripId }: { tripId: string }) {
 
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
-        <OfflinePackBar info={offlinePack} saving={offlinePacking} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
+        <OfflinePackBar info={offlinePack} saving={offlinePacking} resetting={offlineResetting} resetMessage={offlineResetMessage} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
         {(!syncState.online || syncState.pending > 0 || syncState.failed) && <div className={`sync-status-bar ${syncState.online ? 'syncing' : 'offline'}`}><span>{syncState.online ? <RefreshCw size={14}/> : <WifiOff size={14}/>}<b>{syncState.online ? (syncState.failed ? '동기화 재시도 필요' : '변경 동기화 중') : '오프라인'}</b>{syncState.pending > 0 && <em>{syncState.pending}개 변경 대기</em>}</span><small>{syncState.online ? '연결된 상태에서 자동 저장합니다.' : '일정 변경은 이 기기에 저장하고 연결되면 자동 반영합니다.'}</small></div>}
         <div className="content-area">
           {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} weatherHours={weatherHours} reload={reload} onOpenTab={selectTab} />}
@@ -428,13 +440,15 @@ function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { 
   </header>;
 }
 
-function OfflinePackBar({ info, saving, online, error, onSave, onReset }: { info: OfflinePackInfo | null; saving: boolean; online: boolean; error: string; onSave: () => void; onReset: () => void }) {
+function OfflinePackBar({ info, saving, resetting, resetMessage, online, error, onSave, onReset }: { info: OfflinePackInfo | null; saving: boolean; resetting: boolean; resetMessage: string; online: boolean; error: string; onSave: () => void; onReset: () => void }) {
   const stale = Boolean(info && Date.now() - info.saved_at > 12 * 60 * 60 * 1000);
   const savedAt = info ? new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(info.saved_at)) : '';
   const storage = info?.storage_bytes ? formatBytes(info.storage_bytes) : null;
-  return <div className={`offline-pack-bar ${info ? 'ready' : 'empty'} ${!online ? 'offline' : ''} ${error ? 'error' : ''}`}>
-    <div className="offline-pack-copy"><span className="offline-pack-icon">{error ? <AlertTriangle size={16}/> : info ? <Check size={16}/> : <Download size={16}/>}</span><span><strong>{error ? '오프라인 저장 확인 필요' : info ? '오프라인 사용 준비됨' : '여행 전체 오프라인 저장'}</strong><small>{error || (info ? `앱 · 일정 · 일본어 · ${info.weather_saved ? '날씨' : '날씨 제외'} · 좌표 기반 오프라인 동선 지도 저장` : 'Wi-Fi에서 한 번 저장하면 일본에서 데이터 없이 핵심 화면을 열 수 있습니다.')}</small></span></div>
-    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button><button className="offline-reset" onClick={onReset} disabled={!online || saving} title="이 기기의 저장된 여행 데이터만 지우고 서버에서 다시 받기"><RefreshCw size={13}/>로컬 데이터 초기화</button></div>
+  const headline = error ? '오프라인 저장 확인 필요' : resetting ? '로컬 데이터 초기화 중' : resetMessage ? '최신 서버 데이터로 새로고침 완료' : info ? '오프라인 사용 준비됨' : '여행 전체 오프라인 저장';
+  const detail = error || resetMessage || (info ? `앱 · 일정 · 일본어 · ${info.weather_saved ? '날씨' : '날씨 제외'} · 좌표 기반 오프라인 동선 지도 저장` : 'Wi-Fi에서 한 번 저장하면 일본에서 데이터 없이 핵심 화면을 열 수 있습니다.');
+  return <div className={`offline-pack-bar ${info ? 'ready' : 'empty'} ${!online ? 'offline' : ''} ${error ? 'error' : ''} ${resetMessage ? 'reset-done' : ''}`}>
+    <div className="offline-pack-copy"><span className="offline-pack-icon">{error ? <AlertTriangle size={16}/> : resetting ? <RefreshCw size={16}/> : resetMessage || info ? <Check size={16}/> : <Download size={16}/>}</span><span><strong>{headline}</strong><small>{detail}</small></span></div>
+    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || resetting || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button><button className="offline-reset" onClick={onReset} disabled={!online || saving || resetting} title={online ? '이 기기의 저장된 여행 데이터만 지우고 서버에서 다시 받기 · 동기화 대기 변경은 유지' : '오프라인에서는 서버 최신 데이터를 받을 수 없어 초기화할 수 없습니다.'}><RefreshCw size={13}/>{resetting ? '초기화 중…' : '로컬 데이터 초기화'}</button></div>
   </div>;
 }
 
@@ -618,12 +632,16 @@ function TripJourneyCard({ group, active, now, nextEventId, onSetStatus }: { gro
 }
 
 const tripShoppingItems = [
-  { id: 'kitkat-matcha', category: '과자 · 선물', name: 'KitKat 진한 말차 10매', price: '목표 ¥350–550', buy: '드럭스토어 · 대형 편의점 · 돈키 계열', note: '¥550 이하면 무난. 여름에는 초콜릿이 녹을 수 있어 여행 마지막 날 가까이 구매.', image: null, source: 'https://kitkat.nestle.jp/products/kitkat-matcha-green-tea' },
-  { id: 'jagarico', category: '편의점 간식', name: 'Calbee じゃがりこ', price: '목표 ¥150–220 / 컵', buy: 'FamilyMart · 편의점', note: '샐러드/치즈 계열 기본맛 우선. 부피가 커서 선물용 대량 구매보다는 현지 간식용.', image: 'https://www.calbee.co.jp/jagarico/assets/images/ogp.png', source: 'https://www.calbee.co.jp/jagarico/' },
-  { id: 'pocky', category: '과자 · 선물', name: 'Pocky · 일본 한정/계절맛', price: '목표 ¥180–300 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '기본맛보다 계절/지역 한정이 보이면 1–2개만. ¥300을 크게 넘으면 기념품점 프리미엄 가능성.', image: 'https://www.glico.com/assets/images/original/pocky_2026KV%EF%BC%88%E3%82%B9%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E6%A1%88%EF%BC%89%20%281%29.jpg', source: 'https://www.glico.com/jp/product/chocolate/pocky/' },
-  { id: 'alfort', category: '과자 · 선물', name: 'Bourbon Alfort Mini', price: '목표 ¥150–250 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '가격 대비 나눠주기 좋은 초콜릿 과자. 여러 맛을 조금씩 섞어 사기 좋음.', image: 'https://www.bourbon.co.jp/product_file/file/36079-01%E3%82%A2%E3%83%AB%E3%83%95%E3%82%A9%E3%83%BC%E3%83%88%28SSS%29_%E7%AB%8B%E4%BD%93%EF%BC%88%E3%83%81%E3%83%A7%E3%82%B3%E3%83%AC%E3%83%BC%E3%83%88%E8%89%B2%E5%A4%89%E6%9B%B4%EF%BC%89-s.jpg', source: 'https://www.bourbon.co.jp/' },
-  { id: 'melanocc', category: '드럭스토어', name: 'Melano CC 프리미엄 미용액 20mL', price: '기준가 ¥1,628', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '공식 온라인 정가가 ¥1,628. 면세/매장 할인 후 이보다 내려가면 좋은 편.', image: 'https://jp.rohto.com/-/media/com/melanocc/20250828/assets/img/ogp_top.png?sc_lang=ja-jp', source: 'https://www.shop.rohto.co.jp/category/skincare/melanocc/168583.html' },
-  { id: 'bioreuv', category: '드럭스토어', name: 'Biore UV Aqua Rich', price: '목표 ¥800–1,100', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '일상용 선크림 후보. 대용량/기획세트는 단위 용량 가격을 비교.', image: 'https://www.kao.co.jp/content/dam/sites/kao/www-kao-co-jp/bioreuv/cmn/share_bioreuv.jpg', source: 'https://www.kao.co.jp/bioreuv/' },
+  { id: 'kitkat-matcha', category: '편의점 · 과자', name: 'KitKat 일본 한정 · 말차/지역맛', price: '적정 ¥300–700', buy: '드럭스토어 · 대형 편의점 · 마트', note: '이 범위면 무난. 여름에는 초콜릿이 녹기 쉬우니 여행 마지막 날 가까이 구매.', image: null, source: 'https://kitkat.nestle.jp/products/kitkat-matcha-green-tea' },
+  { id: 'jagarico', category: '편의점 · 과자', name: 'Calbee じゃがりこ', price: '적정 ¥150–220 / 컵', buy: 'FamilyMart · 편의점', note: '샐러드/치즈 계열 기본맛 우선. 부피가 커서 선물용 대량 구매보다 현지 간식용.', image: 'https://www.calbee.co.jp/jagarico/assets/images/ogp.png', source: 'https://www.calbee.co.jp/jagarico/' },
+  { id: 'pocky', category: '편의점 · 과자', name: 'Pocky · 일본 한정/계절맛', price: '적정 ¥150–300 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '계절/지역 한정이 보이면 1–2개만. ¥300을 많이 넘으면 다른 매장 가격도 확인.', image: 'https://www.glico.com/assets/images/original/pocky_2026KV%EF%BC%88%E3%82%B9%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E6%A1%88%EF%BC%89%20%281%29.jpg', source: 'https://www.glico.com/jp/product/chocolate/pocky/' },
+  { id: 'alfort', category: '편의점 · 과자', name: 'Bourbon Alfort Mini', price: '적정 ¥150–300 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '가격 대비 나눠주기 좋은 초콜릿 과자. 여러 맛을 조금씩 섞어 사기 좋음.', image: 'https://www.bourbon.co.jp/product_file/file/36079-01%E3%82%A2%E3%83%AB%E3%83%95%E3%82%A9%E3%83%BC%E3%83%88%28SSS%29_%E7%AB%8B%E4%BD%93%EF%BC%88%E3%83%81%E3%83%A7%E3%82%B3%E3%83%AC%E3%83%BC%E3%83%88%E8%89%B2%E5%A4%89%E6%9B%B4%EF%BC%89-s.jpg', source: 'https://www.bourbon.co.jp/' },
+  { id: 'melanocc', category: '드럭스토어', name: 'Melano CC 프리미엄 미용액 20mL', price: '적정 ¥1,300–1,800 · 공식 ¥1,628', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '공식 온라인 정가 ¥1,628 기준. 면세/매장 할인 후 이보다 내려가면 좋은 편.', image: 'https://jp.rohto.com/-/media/com/melanocc/20250828/assets/img/ogp_top.png?sc_lang=ja-jp', source: 'https://www.shop.rohto.co.jp/category/skincare/melanocc/168583.html' },
+  { id: 'bioreuv', category: '드럭스토어', name: 'Biore UV Aqua Rich', price: '적정 ¥700–1,100', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '대용량/기획세트는 단위 용량 가격을 비교. ¥1,100을 크게 넘으면 다른 매장 확인.', image: 'https://www.kao.co.jp/content/dam/sites/kao/www-kao-co-jp/bioreuv/cmn/share_bioreuv.jpg', source: 'https://www.kao.co.jp/bioreuv/' },
+  { id: 'rohto-eyedrops', category: '드럭스토어', name: 'Rohto 안약 · Z!/일반 피로안 계열', price: '적정 ¥500–1,200', buy: 'Matsumoto Kiyoshi · 드럭스토어', note: '용도·콘택트 착용 여부에 맞는 제품을 고르고 사용상 주의를 확인. 캐릭터 한정판은 가격 프리미엄보다 성분을 우선.', image: null, source: 'https://jp.rohto.com/product/eyecare/category/eye-drops' },
+  { id: 'anime-acrylic', category: '애니 · 캐릭터', name: 'Acrylic stand · 아크릴 스탠드', price: '적정 ¥800–2,000', buy: 'animate Osaka Nippombashi', note: '신품 정가 비교용. ¥2,000을 크게 넘으면 한정판/대형 사이즈인지 먼저 확인.', image: 'https://www.animate.co.jp/assets/uploads/2024/08/1765503310-1ccef6f64a2f65372d25265cac2ee681.jpg', source: 'https://www.animate.co.jp/en/shop/nipponbashi/' },
+  { id: 'anime-keyring', category: '애니 · 캐릭터', name: 'Keyring · can badge', price: '적정 ¥300–1,200', buy: 'animate · Surugaya Otaroad', note: '랜덤 블라인드 상품은 원하는 캐릭터가 아니어도 교환이 어려우니 개별 진열 중고품과 가격 비교.', image: 'https://www.animate.co.jp/assets/uploads/2024/08/1765503310-1ccef6f64a2f65372d25265cac2ee681.jpg', source: 'https://www.animate.co.jp/en/shop/nipponbashi/' },
+  { id: 'used-figures', category: '애니 · 캐릭터', name: 'Surugaya 중고 피규어', price: '¥1,000–4,000부터 탐색', buy: 'Surugaya Otaroad 2F', note: '박스 손상·구성품 누락·미개봉 여부에 따라 차이가 큼. 상태표시와 동일 캐릭터 매물 2–3개를 비교.', image: null, source: 'https://www.suruga-ya.jp/feature/realstore/otaroad/index.html' },
 ];
 
 function ShoppingItemPhoto({ item }: { item: typeof tripShoppingItems[number] }) {
@@ -637,6 +655,10 @@ function TripShoppingGuidePanel({ trip }: { trip: Trip }) {
     try { return new Set(JSON.parse(localStorage.getItem('mytrip-shopping-bought') || '[]')); } catch { return new Set(); }
   });
   const shoppingEvents = trip.events.filter((event) => ['2026-09-15', '2026-09-16'].includes(event.date) && /Animate|Surugaya|Den Den|FamilyMart|Matsumoto|쇼핑|간식/i.test(`${event.title} ${event.location || ''}`)).sort((a, b) => `${a.date} ${a.start_time || ''}`.localeCompare(`${b.date} ${b.start_time || ''}`));
+  const shoppingGroups = useMemo(() => tripShoppingItems.reduce<Record<string, typeof tripShoppingItems>>((groups, item) => {
+    (groups[item.category] ||= []).push(item);
+    return groups;
+  }, {}), []);
   function toggleBought(id: string) {
     setBought((current) => {
       const next = new Set(current);
@@ -648,7 +670,7 @@ function TripShoppingGuidePanel({ trip }: { trip: Trip }) {
   return <div className="shopping-guide-page">
     <section className="trip-tool-intro shopping-guide-hero"><div><p className="eyebrow">OSAKA SHOPPING RUN</p><h2>오사카에서 몰아서 사고, 교토에서는 가볍게.</h2><p>덴덴타운 애니 굿즈 → 편의점 간식 → 마지막 밤 드럭스토어 순으로 묶었습니다. 가격은 여행 중 판단용 목표 범위입니다.</p></div><div className="shopping-progress"><strong>{bought.size}/{tripShoppingItems.length}</strong><span>구매 체크</span></div></section>
     <section className="shopping-route-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">IN THE ITINERARY</p><h3>실제 일정에 넣은 쇼핑</h3></span></div><b>9/15–16 · Osaka</b></div><div className="shopping-route-list">{shoppingEvents.map((event) => <article key={event.id}><span>{formatMonthDay(event.date)} · {event.start_time || '--:--'}</span><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}{googleMapsEventUrl(event) && <a href={googleMapsEventUrl(event)!} target="_blank" rel="noreferrer"><MapPin size={12}/>지도</a>}</article>)}</div></section>
-    <section className="shopping-list-section"><div className="trip-section-heading"><div><ShoppingBag/><span><p className="eyebrow">BUY LIST</p><h3>사올 만한 것 · 적정 가격대</h3></span></div><b>{tripShoppingItems.length}개 추천</b></div><div className="shopping-item-grid">{tripShoppingItems.map((item) => <article key={item.id} className={bought.has(item.id) ? 'bought' : ''}><ShoppingItemPhoto item={item}/><div className="shopping-item-copy"><span>{item.category}</span><h4>{item.name}</h4><strong>{item.price}</strong><p>{item.buy}</p><small>{item.note}</small><footer><button onClick={() => toggleBought(item.id)}><Check size={13}/>{bought.has(item.id) ? '구매 완료' : '살 것'}</button><a href={item.source} target="_blank" rel="noreferrer"><ExternalLink size={12}/>제품 보기</a></footer></div></article>)}</div><p className="shopping-price-note">가격은 매장·세일·면세 여부에 따라 달라질 수 있습니다. 특히 과자는 “이 범위 이하이면 그냥 산다”는 현장 판단용 가이드로 보세요.</p></section>
+    <section className="shopping-list-section"><div className="trip-section-heading"><div><ShoppingBag/><span><p className="eyebrow">BUY LIST</p><h3>사올 만한 것 · 적정 가격대</h3></span></div><b>{tripShoppingItems.length}개 추천</b></div><div className="shopping-category-list">{Object.entries(shoppingGroups).map(([category, items]) => <section className="shopping-category-group" key={category}><header><h4>{category}</h4><span>{items.length}개</span></header><div className="shopping-item-grid">{items.map((item) => <article key={item.id} className={bought.has(item.id) ? 'bought' : ''}><ShoppingItemPhoto item={item}/><div className="shopping-item-copy"><span>{item.category}</span><h4>{item.name}</h4><strong>{item.price}</strong><p>{item.buy}</p><small>{item.note}</small><footer><button onClick={() => toggleBought(item.id)}><Check size={13}/>{bought.has(item.id) ? '구매 완료' : '살 것'}</button><a href={item.source} target="_blank" rel="noreferrer"><ExternalLink size={12}/>제품 보기</a></footer></div></article>)}</div></section>)}</div><p className="shopping-price-note">가격은 매장·세일·면세 여부에 따라 달라질 수 있습니다. “이 범위 안이면 무난, 많이 비싸면 다른 매장도 본다”는 현장 판단용 가이드입니다.</p></section>
   </div>;
 }
 
