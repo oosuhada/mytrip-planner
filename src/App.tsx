@@ -5,7 +5,7 @@ import maplibregl, { Marker } from 'maplibre-gl';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, Copy, ExternalLink, GripVertical,
   ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, Route, Search, Send, Sparkles, Trash2, Users, Utensils, Vote, X,
+  Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, X,
 } from 'lucide-react';
 import { api, del, patch, post } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay } from './types';
@@ -187,7 +187,7 @@ function TripPage({ tripId }: { tripId: string }) {
           {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
-          {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} />}
+          {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} tripMode={workspaceMode === 'trip'} />}
           {tab === 'map' && <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />}
           {workspaceMode === 'plan' && tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
           {workspaceMode === 'plan' && tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={load} />}
@@ -342,10 +342,11 @@ function TripLivePanel({ trip, weather, reload, onOpenTab }: { trip: Trip; weath
   const decisions = (trip.decision_slots || []).filter((slot) => slot.date === focusDate);
   const reservationRows = mealSlots.map((slot) => ({ slot, restaurant: slot.selected_restaurant_id ? restaurants.get(slot.selected_restaurant_id) : undefined })).filter((row) => row.restaurant);
   const dayWeather = weather.find((item) => item.date === focusDate);
-  const progressEvents = events.filter((event) => event.start_time);
-  const completedCount = active ? progressEvents.filter((event) => {
+  const progressEvents = events;
+  const completedCount = progressEvents.filter((event) => Boolean(event.completed_at)).length;
+  const elapsedUncheckedCount = active ? progressEvents.filter((event) => {
     const finish = event.end_time || event.start_time;
-    return Boolean(finish && finish < now);
+    return !event.completed_at && Boolean(finish && finish < now);
   }).length : 0;
   const dayProgress = progressEvents.length ? Math.min(100, Math.round((completedCount / progressEvents.length) * 100)) : 0;
   const walkingTarget = events.find((event) => typeof event.meta?.daily_walking === 'string')?.meta?.daily_walking;
@@ -373,6 +374,10 @@ function TripLivePanel({ trip, weather, reload, onOpenTab }: { trip: Trip; weath
     await patch(`/api/decision-slots/${slotId}/select`, { option_id: optionId });
     reload();
   }
+  async function toggleEventComplete(event: TripEvent) {
+    await patch(`/api/events/${event.id}`, { completed_at: event.completed_at ? null : new Date().toISOString() });
+    reload();
+  }
   function scrollLiveEvents(direction: -1 | 1) {
     const node = liveEventRef.current;
     if (!node) return;
@@ -385,16 +390,16 @@ function TripLivePanel({ trip, weather, reload, onOpenTab }: { trip: Trip; weath
 
     <section className="trip-field-dashboard" aria-label="오늘 여행 현황">
       <div className="trip-field-progress">
-        <div><span><Navigation size={15}/>오늘 진행</span><strong>{active ? `${completedCount}/${progressEvents.length}` : `${events.length}개 일정`}</strong></div>
+        <div><span><Navigation size={15}/>오늘 체크</span><strong>{completedCount}/{progressEvents.length}</strong></div>
         <div className="trip-progress-track"><i style={{ width: `${dayProgress}%` }}/></div>
-        <small>{active ? `${dayProgress}% 진행 · 현재 이후 ${remainingCount}개` : 'TRIP 모드에서 당일 진행률이 자동 표시됩니다.'}</small>
+        <small>{active ? `${dayProgress}% 완료${elapsedUncheckedCount ? ` · 시간상 지난 미체크 ${elapsedUncheckedCount}개` : ''}` : '여행 중 직접 완료 체크한 일정만 진행률에 반영됩니다.'}</small>
       </div>
       <div className="trip-field-stat"><span><Route size={15}/>보행 목표</span><strong>{typeof walkingTarget === 'string' ? walkingTarget : '여유 있게'}</strong><small>10k steps 크게 넘기지 않기</small></div>
       <div className="trip-field-stat"><span><CloudRain size={15}/>오늘 날씨</span><strong>{dayWeather ? `${Math.round(dayWeather.max)}° / ${Math.round(dayWeather.min)}°` : '예보 확인 중'}</strong><small>{rainLevel !== null ? `강수 ${rainLevel}%` : '날씨 탭에서 확인'}</small></div>
       <div className="trip-field-alert"><CloudRain size={16}/><span>{fieldAlert}</span></div>
     </section>
 
-    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><div className="trip-scroll-controls"><b>{remainingCount > 0 ? `현재 이후 ${remainingCount}개` : '오늘 일정 종료'}</b><button onClick={() => scrollLiveEvents(-1)} aria-label="이전 일정"><ArrowLeft size={15}/></button><button onClick={() => scrollLiveEvents(1)} aria-label="다음 일정"><ChevronRight size={15}/></button></div></div><div className="trip-live-events" ref={liveEventRef}>{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const eventIndex = liveStartIndex + index; const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; const liveLabel = isNow ? 'NOW' : eventIndex === contextIndex ? 'PREV' : eventIndex === nextIndex ? 'NEXT' : 'THEN'; return <article className={`trip-live-event ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{liveLabel}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions">{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
+    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><div className="trip-scroll-controls"><b>{remainingCount > 0 ? `현재 이후 ${remainingCount}개` : '오늘 일정 종료'}</b><button onClick={() => scrollLiveEvents(-1)} aria-label="이전 일정"><ArrowLeft size={15}/></button><button onClick={() => scrollLiveEvents(1)} aria-label="다음 일정"><ChevronRight size={15}/></button></div></div><div className="trip-live-events" ref={liveEventRef}>{liveEvents.map((event, index) => { const mapUrl = googleMapsEventUrl(event); const eventIndex = liveStartIndex + index; const isNow = active && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; const liveLabel = isNow ? 'NOW' : eventIndex === contextIndex ? 'PREV' : eventIndex === nextIndex ? 'NEXT' : 'THEN'; return <article className={`trip-live-event ${isNow ? 'now' : ''} ${event.completed_at ? 'completed' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{event.completed_at ? 'DONE' : liveLabel}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions"><button className={`trip-complete-action ${event.completed_at ? 'done' : ''}`} onClick={() => toggleEventComplete(event)}><Check size={14}/>{event.completed_at ? '완료됨 · 취소' : '완료 체크'}</button>{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}{event.address && <button onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={13}/>주소 복사</button>}</div></div></article>; })}</div></section>
 
     <section className="trip-command-center">
       <div className="trip-section-heading"><div><Compass/><span><p className="eyebrow">FIELD COMMAND</p><h3>현장에서 바로 쓰기</h3></span></div><b>지도 · 식사 · 숙소를 한 번에</b></div>
@@ -440,26 +445,53 @@ const tripPhraseGroups = [
   { title: '식당', icon: <Utensils/>, items: [
     ['すみません、二人です。', '스미마센, 후타리 데스.', '실례합니다, 두 명이에요.'],
     ['予約しています。', '요야쿠 시테이마스.', '예약했습니다.'],
-    ['これは辛いですか？', '코레와 카라이 데스카?', '이거 매운가요?'],
+    ['おすすめは何ですか？', '오스스메와 난데스카?', '추천 메뉴가 뭐예요?'],
+    ['お水を二つお願いします。', '오미즈오 후타츠 오네가이시마스.', '물 두 잔 부탁해요.'],
+    ['持ち帰りできますか？', '모치카에리 데키마스카?', '포장할 수 있나요?'],
+    ['別々に払えますか？', '베츠베츠니 하라에마스카?', '따로 계산할 수 있나요?'],
+  ] },
+  { title: '음식 제한', icon: <Utensils/>, items: [
+    ['魚の寿司は食べられます。', '사카나노 스시와 타베라레마스.', '생선 초밥은 먹을 수 있어요.'],
+    ['ウニは食べられません。', '우니와 타베라레마센.', '우니는 먹을 수 없어요.'],
     ['魚以外の海鮮は食べられません。', '사카나 이가이노 카이센와 타베라레마센.', '생선 이외의 해산물은 먹을 수 없어요.'],
+    ['貝類は入っていますか？', '카이루이와 하잇테이마스카?', '조개류가 들어 있나요?'],
+    ['内臓は入っていますか？', '나이조와 하잇테이마스카?', '내장이 들어 있나요?'],
+    ['これは辛いですか？', '코레와 카라이 데스카?', '이거 매운가요?'],
+    ['辛くしないでください。', '카라쿠 시나이데 쿠다사이.', '맵지 않게 해주세요.'],
   ] },
   { title: '교통', icon: <Navigation/>, items: [
     ['この電車は京都駅に行きますか？', '코노 덴샤와 교토에키니 이키마스카?', '이 전철은 교토역에 가나요?'],
     ['河原町五条で降りたいです。', '카와라마치 고조데 오리타이 데스.', '가와라마치고조에서 내리고 싶어요.'],
     ['ICOCAは使えますか？', '이코카와 츠카에마스카?', 'ICOCA를 사용할 수 있나요?'],
     ['この乗り場で合っていますか？', '코노 노리바데 앗테이마스카?', '이 승강장이 맞나요?'],
+    ['何番ホームですか？', '난반 호-무 데스카?', '몇 번 승강장이에요?'],
+    ['乗り換えはどこですか？', '노리카에와 도코데스카?', '환승은 어디에서 하나요?'],
+    ['このバスは河原町五条に行きますか？', '코노 바스와 카와라마치 고조니 이키마스카?', '이 버스는 가와라마치고조에 가나요?'],
   ] },
   { title: '호텔', icon: <Hotel/>, items: [
     ['荷物を預けてもいいですか？', '니모츠오 아즈케테모 이이데스카?', '짐을 맡겨도 될까요?'],
     ['チェックインをお願いします。', '첵쿠인오 오네가이시마스.', '체크인 부탁드립니다.'],
     ['大浴場はどこですか？', '다이요쿠조와 도코데스카?', '대욕장은 어디인가요?'],
-    ['この住所まで行きたいです。', '코노 주소마데 이키타이 데스.', '이 주소까지 가고 싶어요.'],
+    ['タオルはどこですか？', '타오루와 도코데스카?', '수건은 어디에 있나요?'],
+    ['チェックアウト後も荷物を預けられますか？', '첵쿠아우토 고모 니모츠오 아즈케라레마스카?', '체크아웃 후에도 짐을 맡길 수 있나요?'],
+    ['Wi-Fiのパスワードは何ですか？', '와이파이노 파스와-도와 난데스카?', 'Wi-Fi 비밀번호가 뭐예요?'],
   ] },
-  { title: '도움 요청', icon: <MessageCircle/>, items: [
+  { title: '쇼핑 · 결제', icon: <ShoppingBag/>, items: [
+    ['クレジットカードは使えますか？', '쿠레짓토 카-도와 츠카에마스카?', '신용카드 사용할 수 있나요?'],
+    ['交通系ICカードは使えますか？', '코-츠-케이 아이시 카-도와 츠카에마스카?', '교통계 IC카드로 결제할 수 있나요?'],
+    ['これを二つください。', '코레오 후타츠 쿠다사이.', '이거 두 개 주세요.'],
+    ['袋を一枚ください。', '후쿠로오 이치마이 쿠다사이.', '봉투 한 장 주세요.'],
+    ['免税できますか？', '멘제이 데키마스카?', '면세 가능한가요?'],
+  ] },
+  { title: '도움 · 길찾기', icon: <MessageCircle/>, items: [
     ['もう一度お願いします。', '모- 이치도 오네가이시마스.', '한 번 더 말씀해 주세요.'],
     ['ゆっくり話してください。', '윳쿠리 하나시테 쿠다사이.', '천천히 말씀해 주세요.'],
     ['英語は話せますか？', '에이고와 하나세마스카?', '영어 하실 수 있나요?'],
     ['トイレはどこですか？', '토이레와 도코데스카?', '화장실은 어디인가요?'],
+    ['この住所まで行きたいです。', '코노 주소마데 이키타이 데스.', '이 주소까지 가고 싶어요.'],
+    ['この場所はどこですか？', '코노 바쇼와 도코데스카?', '이 장소는 어디인가요?'],
+    ['薬局はどこですか？', '야쿄쿠와 도코데스카?', '약국은 어디인가요?'],
+    ['気分が悪いです。', '키분가 와루이 데스.', '몸이 안 좋아요.'],
   ] },
 ];
 
@@ -480,7 +512,7 @@ function TripWeatherOutfitPanel({ trip, weather }: { trip: Trip; weather: Weathe
   return <div className="trip-tool-page weather-outfit-page"><div className="trip-tool-intro"><div><p className="eyebrow">WEATHER · OUTFIT · {formatDay(focusDate)}</p><h2>날씨 · 오늘의 코디</h2><p>{active ? '오늘 일본 날씨와 도보 일정에 맞춘 옷차림만 빠르게 확인합니다.' : '여행 전에는 Day 1 예보를 기준으로 미리보기 합니다.'}</p></div></div>{dayWeather ? <><section className="weather-outfit-hero"><div className="weather-outfit-main"><span>{weatherIcon(dayWeather.code)}</span><div><strong>{Math.round(max)}° / {Math.round(min)}°</strong><p>{weatherLabel(dayWeather.code)} · 강수확률 {Math.round(rain)}%</p></div></div><div className="weather-outfit-advice"><span>오늘 코디</span><h3>{outfit}</h3><p>{rain >= 60 ? '비가 강하면 야외 한 곳은 과감히 빼고 젖어도 관리하기 쉬운 하의와 워킹화를 우선.' : rain >= 30 ? '우산을 바로 꺼낼 수 있게 백팩 바깥쪽에 두고, 실내 냉방용 얇은 레이어를 챙기기.' : '통기성 좋은 옷과 워킹화를 기본으로 하고 실내 냉방용 얇은 레이어만 챙기기.'}</p></div></section><section className="trip-live-section outfit-carry-section"><div className="trip-section-heading"><div><Luggage/><span><p className="eyebrow">TAKE TODAY</p><h3>오늘 바로 챙길 것</h3></span></div></div><div className="outfit-carry-list">{carry.map((item) => <span key={item}><Check size={14}/>{item}</span>)}</div></section><section className="trip-live-section mini-forecast-section"><div className="trip-section-heading"><div><CloudRain/><span><p className="eyebrow">TRIP FORECAST</p><h3>여행 기간 예보</h3></span></div></div><div className="weather-days">{weather.map((item) => <div key={item.date}><span>{formatDay(item.date)}</span><b>{weatherIcon(item.code)} {Math.round(item.max)}° / {Math.round(item.min)}°</b><small>{weatherLabel(item.code)} · 강수 {item.rain}%</small></div>)}</div></section></> : <section className="trip-live-section"><p>예보를 불러오는 중입니다.</p></section>}</div>;
 }
 
-function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: WeatherDay[]; reload: () => void }) {
+function ScheduleBoard({ trip, weather, reload, tripMode }: { trip: Trip; weather: WeatherDay[]; reload: () => void; tripMode: boolean }) {
   const days = dateRange(trip.start_date, trip.end_date);
   const today = todayInTimeZone('Asia/Tokyo');
   const tripIsActive = today >= trip.start_date && today <= trip.end_date;
@@ -529,25 +561,25 @@ function ScheduleBoard({ trip, weather, reload }: { trip: Trip; weather: Weather
     <div className="schedule-intro"><div><h2>Day plan</h2><p>일정을 잡아 원하는 날짜로 옮기세요. 시간은 카드에서 바로 수정할 수 있습니다.</p></div><span className="hint"><GripVertical size={15} /> drag to move</span></div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div className="day-grid" ref={dayGridRef} data-initial-day={initialDay} data-view-mode={viewMode}>
-        {days.map((date) => <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={trip.events.filter((e) => e.date === date)} weather={weather.find((w) => w.date === date)} reload={reload} />)}
+        {days.map((date) => <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={trip.events.filter((e) => e.date === date)} weather={weather.find((w) => w.date === date)} reload={reload} allowCompletion={tripMode} />)}
       </div>
     </DndContext>
   </div>;
 }
 
-function DayColumn({ date, index, active, events, weather, reload }: { date: string; index: number; active: boolean; events: TripEvent[]; weather?: WeatherDay; reload: () => void }) {
+function DayColumn({ date, index, active, events, weather, reload, allowCompletion }: { date: string; index: number; active: boolean; events: TripEvent[]; weather?: WeatherDay; reload: () => void; allowCompletion: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${date}` });
   const walking = events.find((event) => typeof event.meta?.daily_walking === 'string')?.meta?.daily_walking;
   const orderedEvents = [...events].sort((a, b) => compareDayEvents(a, b, events));
   return <section className={`day-column ${active ? 'mobile-active' : ''} ${isOver ? 'drop-active' : ''}`} ref={setNodeRef} data-day-date={date}>
     <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong>{typeof walking === 'string' && <small className="day-walking">보행 {walking}</small>}</div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
     <div className="day-events">
-      {orderedEvents.length ? orderedEvents.map((event) => <EventCard key={event.id} event={event} reload={reload} />) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
+      {orderedEvents.length ? orderedEvents.map((event) => <EventCard key={event.id} event={event} reload={reload} allowCompletion={allowCompletion} />) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
     </div>
   </section>;
 }
 
-function EventCard({ event, reload }: { event: TripEvent; reload: () => void }) {
+function EventCard({ event, reload, allowCompletion }: { event: TripEvent; reload: () => void; allowCompletion: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `event:${event.id}` });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 20 } : undefined;
   const icon = event.kind === 'flight' ? <Plane /> : event.kind === 'hotel' ? <BedDouble /> : event.kind === 'train' || event.kind === 'transfer' ? <Navigation /> : <MapPin />;
@@ -564,11 +596,16 @@ function EventCard({ event, reload }: { event: TripEvent; reload: () => void }) 
     if (event.source === 'booking' && !window.confirm('확정 예약 일정을 삭제할까요?')) return;
     await del(`/api/events/${event.id}`); reload();
   }
-  return <article ref={setNodeRef} style={style} className={`event-card kind-${event.kind} ${isDragging ? 'dragging' : ''}`}>
+  async function toggleComplete() {
+    await patch(`/api/events/${event.id}`, { completed_at: event.completed_at ? null : new Date().toISOString() });
+    reload();
+  }
+  return <article ref={setNodeRef} style={style} className={`event-card kind-${event.kind} ${isDragging ? 'dragging' : ''} ${event.completed_at ? 'completed' : ''}`}>
     <button className="drag-handle" {...listeners} {...attributes}><GripVertical size={16} /></button>
     <div className="event-icon">{icon}</div>
     <div className="event-body"><EventVisual event={event} mapUrl={mapUrl}/><div className="event-title-row"><strong>{event.title}</strong><button className="mini-delete" onClick={remove} aria-label="삭제"><Trash2 size={13} /></button></div>
       <div className="event-time"><input className="event-time-24" type="text" inputMode="numeric" maxLength={5} value={timeDraft} placeholder="--:--" onChange={(e) => setTimeDraft(e.target.value)} onBlur={(e) => changeTime(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} aria-label={`${event.title} 시작 시간 24시간제`} />{event.end_time && <span>→ {event.end_time}</span>}{event.source === 'booking' && <span className="booking-lock">확정 예약</span>}</div>
+      {allowCompletion && <button className={`event-completion-toggle ${event.completed_at ? 'done' : ''}`} onClick={toggleComplete}><Check size={13}/>{event.completed_at ? '완료됨 · 다시 열기' : '이 일정 완료'}</button>}
       {event.location && (mapUrl ? <a className="event-map-link" href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={12} /><span>{event.location}</span><ExternalLink size={10}/></a> : <p><MapPin size={12} /> {event.location}</p>)}
       {event.address && <button className="copy-address" onClick={() => navigator.clipboard?.writeText(event.address || '')}><Copy size={10}/> 주소 복사</button>}
       {event.notes && <small>{event.notes}</small>}

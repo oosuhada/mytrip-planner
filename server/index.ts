@@ -65,7 +65,7 @@ app.post('/api/trips/:id/events', async (req, res) => {
 app.patch('/api/events/:id', async (req, res) => {
   const existing = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id) as any;
   if (!existing) return res.status(404).json({ error: 'Event not found' });
-  const allowed = ['title', 'kind', 'date', 'start_time', 'end_time', 'location', 'address', 'lat', 'lng', 'notes', 'sort_order'];
+  const allowed = ['title', 'kind', 'date', 'start_time', 'end_time', 'location', 'address', 'lat', 'lng', 'notes', 'sort_order', 'completed_at'];
   const updates = Object.entries(req.body).filter(([key]) => allowed.includes(key));
   if (!updates.length) return res.json({ ok: true });
   const set = updates.map(([key]) => `${key} = ?`).join(', ');
@@ -195,7 +195,7 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
     trip: { title: trip.title, destination: trip.destination, start_date: trip.start_date, end_date: trip.end_date },
     travelers: (trip.participants || []).map((person: any) => person.name),
     rules: (trip.guides || []).filter((guide: any) => guide.section === 'rules').map((guide: any) => ({ title: guide.title, details: guide.details })),
-    itinerary: (trip.events || []).map((event: any) => ({ date: event.date, start: event.start_time, end: event.end_time, title: event.title, kind: event.kind, location: event.location, notes: event.notes, source: event.source, meta: event.meta })),
+    itinerary: (trip.events || []).map((event: any) => ({ date: event.date, start: event.start_time, end: event.end_time, title: event.title, kind: event.kind, location: event.location, notes: event.notes, source: event.source, completed_at: event.completed_at || null, meta: event.meta })),
     meals: (trip.meal_slots || []).map((slot: any) => ({
       date: slot.date, time: slot.time, label: slot.label, area: slot.area, is_scheduled: Boolean(slot.event_id),
       selected: slot.selected_restaurant_id ? (restaurants.get(slot.selected_restaurant_id) as any)?.name : null,

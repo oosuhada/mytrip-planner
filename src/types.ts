@@ -29,6 +29,7 @@ export type TripEvent = {
   meta?: Record<string, unknown>;
   image_url?: string | null;
   image_source_url?: string | null;
+  completed_at?: string | null;
 };
 
 export type Place = {

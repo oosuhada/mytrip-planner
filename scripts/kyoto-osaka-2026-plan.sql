@@ -742,6 +742,117 @@ INSERT OR IGNORE INTO checklist_packing_links (checklist_id, packing_id)
 SELECT 'plan-task-power', id FROM packing_items
 WHERE trip_id=(SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1) AND label IN ('보조배터리','휴대폰 충전기');
 
+-- 2026-09-11 enrichment pass: more field-useful meal and sightseeing options.
+-- These are alternatives only; they do not overwrite selected restaurants or itinerary events.
+INSERT INTO restaurants (
+  id, trip_id, name, city, planned_date, planned_time, hours, price_range,
+  reservation_action, reservation_status, reservation_channel, reservation_url,
+  notes, dietary_notes, sort_order
+) VALUES
+('plan-rest-morimori-kawaramachi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Mori Mori Sushi Shijo Kawaramachi', 'Kyoto', NULL, NULL, '평일 11:00–15:00 / 17:00–21:00, 주말·공휴일 11:00–21:00', '점심 ¥2,000부터 / 저녁 ¥2,500부터', 'RESERVATION OPTIONAL', 'TODO', '공식 매장 안내 / 현장', 'https://www.kyoto-kawaramachigarden.com/en/foodhall/shop_009/', 'Kawaramachi Garden 8F. Kura/Musashi보다 조금 비싸도 1인 ¥2,000–¥4,000 범위에서 생선 위주 선택이 쉬운 회전초밥 대안.', 'Domenic은 참치·연어·흰살생선 위주. 우니·새우·게·조개류 등 생선 외 해산물 제외. Oosu는 매운 군함/소스 제외.', 220),
+('plan-rest-inoichi-hanare', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Menya Inoichi Hanare', 'Kyoto', NULL, NULL, '11:00–14:30 / 17:30–21:00', '약 ¥1,400–¥2,350/인', 'WALK-IN ONLY', 'WALK-IN', '당일 정리권', NULL, 'Shijo역 도보권. 예약은 받지 않고 런치 10:30, 디너 17:00부터 정리권 배포. 인기일에는 개점 전 정리권이 끝날 수 있어 Plan B 성격으로 사용.', '기본 dashi ramen은 생선 절 기반. Domenic은 가리비 덮밥 등 생선 외 해산물 사이드를 피하고, Oosu는 spicy dashi가 아닌 기본 메뉴 선택.', 230),
+('plan-rest-sushiro-namba-amza', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushiro Namba Amza', 'Osaka', NULL, NULL, '평일 11:00–23:00 / 주말·공휴일 10:30–23:00, L.O. 30분 전', '한 접시 ¥150부터 · 약 ¥1,000–¥3,000/인', 'RESERVE NOW', 'TODO', 'Sushiro 공식 앱 / LINE 접수', 'https://www.akindo-sushiro.co.jp/shop/detail.php?id=2225', 'Namba역 5분·Kintetsu-Nippombashi역 4분. Dotonbori의 다른 회전초밥이 붐빌 때 쓰기 좋은 저예산 백업.', 'Domenic은 생선 초밥 중심으로 고르고 우니·조개/갑각류 제외. Oosu는 매운 소스/고추 토핑 제외.', 240),
+('plan-rest-hanamaruken-hozenji', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Hanamaruken Namba Hozenji', 'Osaka', NULL, NULL, '24시간 영업 · 연말연시 제외', '라멘 약 ¥750–¥1,330', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', NULL, 'Namba/Hozenji 도보권의 늦은 시간 라멘 백업. 간단 라멘 ¥750, 행복 라멘 ¥980 수준으로 부담이 적고 심야에도 이용 가능.', '돈코츠 쇼유·돼지고기 중심. Domenic은 새우 미소 라멘을 피하고, Oosu는 매운 미소 추가 없이 기본 메뉴 선택.', 250),
+('plan-rest-ramen-kassai', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'RAMEN KASSAI', 'Osaka', NULL, NULL, '수요일 11:00–15:00 / 17:00–22:00 기준, 방문 당일 재확인', '약 ¥1,780–¥2,580/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', NULL, 'Nipponbashi 3-chome. 교토오리 담백 쇼유·닭백탕·와규 라멘이 있어 숙소권에서 비 오는 날 저녁 Plan B로 쓰기 좋음.', 'Oosu는 spicy wagyu ramen 제외. Domenic은 라멘 자체는 생선 외 해산물/내장 비중이 낮은 메뉴를 선택하고 주문 전 성분 재확인.', 260),
+('plan-rest-osaka-botejyu', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Botejyu Main Store', 'Osaka', NULL, NULL, '대체로 11:00–23:30, L.O. 약 22:45', '돼지 오코노미야키 ¥980 / 돼지 야키소바 ¥1,000', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', NULL, 'Namba역 약 2분. 사용자가 선호하는 야키소바를 확실히 넣기 위한 선택지. 돼지고기 야키소바/돼지 오코노미야키로 해산물·내장을 피하기 쉬움.', 'Domenic은 buta-soba / buta-tama처럼 돼지고기 단일 메뉴 선택. deluxe/mix/seafood 및 aburakasu(내장 유래) 메뉴 제외. Oosu는 매운 추가 소스 제외.', 270)
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, name=excluded.name, city=excluded.city,
+  hours=excluded.hours, price_range=excluded.price_range,
+  reservation_action=excluded.reservation_action, reservation_channel=excluded.reservation_channel,
+  reservation_url=excluded.reservation_url, notes=excluded.notes,
+  dietary_notes=excluded.dietary_notes, sort_order=excluded.sort_order,
+  updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO places (id, trip_id, name, category, address, lat, lng, notes, saved_by)
+VALUES
+('plan-place-rest-morimori-kawaramachi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Mori Mori Sushi Shijo Kawaramachi', 'restaurant', 'Kyoto Kawaramachi Garden 8F, Shijo Kawaramachi, Kyoto', NULL, NULL, '회전초밥 · ¥2,000대부터 · Kawaramachi 실내 식당가', 'research-2026-09-11'),
+('plan-place-rest-inoichi-hanare', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Menya Inoichi Hanare', 'restaurant', '463 Senshojicho, Shimogyo Ward, Kyoto', NULL, NULL, 'dashi ramen · 당일 정리권 · 9/14 저녁 Plan B', 'research-2026-09-11'),
+('plan-place-rest-sushiro-namba-amza', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushiro Namba Amza', 'restaurant', '4F Amza 1000, 2-9-17 Sennichimae, Chuo Ward, Osaka', NULL, NULL, '회전초밥 · ¥150/접시부터 · Namba/Nipponbashi 백업', 'research-2026-09-11'),
+('plan-place-rest-hanamaruken-hozenji', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Hanamaruken Namba Hozenji', 'restaurant', '1-2-1 Namba, Chuo Ward, Osaka', NULL, NULL, '24시간 라멘 · Hozenji/Namba · 늦은 밤 백업', 'research-2026-09-11'),
+('plan-place-rest-ramen-kassai', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'RAMEN KASSAI', 'restaurant', '3-3-2 Nipponbashi, Naniwa Ward, Osaka', NULL, NULL, '교토오리·닭·와규 라멘 · 숙소권 우천 저녁 후보', 'research-2026-09-11'),
+('plan-place-rest-osaka-botejyu', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Botejyu Main Store', 'restaurant', 'Namba, Chuo Ward, Osaka', NULL, NULL, '돼지 야키소바 ¥1,000 · 돼지 오코노미야키 ¥980 · Namba', 'research-2026-09-11'),
+('research-place-sanjusangendo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sanjusangen-do', 'temple', '657 Sanjusangendomawari, Higashiyama Ward, Kyoto', NULL, NULL, '긴 실내 본당 비중이 높아 9/14 비가 강할 때 Kiyomizu 경사 구간을 줄이는 대안.', 'research-2026-09-11'),
+('research-place-kyoto-porta', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Kyoto Porta', 'shopping', 'Kyoto Station, Shimogyo Ward, Kyoto', NULL, NULL, '교토역 직결 지하상가·식당가. 9/13 도착 지연/폭우 또는 9/15 이동 전후에 관광 대신 쉬기 좋은 완전 실내 옵션.', 'research-2026-09-11'),
+('research-place-namba-walk', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Namba Walk', 'shopping', '2-1-15 Sennichimae, Chuo Ward, Osaka', NULL, NULL, 'Namba↔Nipponbashi를 잇는 약 715m 지하상가. 비가 강하면 도톤보리 야외 산책 일부를 이쪽으로 교체.', 'research-2026-09-11'),
+('research-place-denden-town', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Nipponbashi Den Den Town', 'shopping', 'Nipponbashi, Naniwa Ward, Osaka', NULL, NULL, '숙소 바로 앞 전자·게임·애니 상권. 별도 교통 없이 30–60분만 붙였다가 호텔 복귀 가능.', 'research-2026-09-11'),
+('research-place-osaka-history', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Osaka Museum of History', 'activity', '4-1-32 Otemae, Chuo Ward, Osaka', NULL, NULL, 'Osaka Castle 옆 실내 대안. 9/16 수요일은 화요일 정기휴관을 피하며 성인 ¥600, 09:30–17:00.', 'research-2026-09-11'),
+('research-place-kamigata-ukiyoe', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Kamigata Ukiyo-e Museum', 'activity', '1-6-4 Namba, Chuo Ward, Osaka', NULL, NULL, 'Hozenji 바로 옆 작은 실내 박물관. 성인 ¥700, 11:00–18:00. 9/15·16에 30–60분짜리 우천 옵션.', 'research-2026-09-11'),
+('research-place-wahha-kamigata', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Wahha Kamigata', 'activity', 'YES NAMBA Building 7F, 12-7 Namba Sennichimae, Chuo Ward, Osaka', NULL, NULL, '무료·실내·약 30분. 난바에서 오사카 만자이/라쿠고 문화를 짧게 보는 우천/더위 대안.', 'research-2026-09-11'),
+('research-place-shitennoji', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Shitennoji', 'temple', '1-11-18 Shitennoji, Tennoji Ward, Osaka', NULL, NULL, 'Ebisucho 숙소권에서 멀지 않은 역사 사찰. 중심 가람 성인 ¥500. Dotonbori를 이미 충분히 봤을 때만 FLEX.', 'research-2026-09-11')
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, name=excluded.name, category=excluded.category,
+  address=excluded.address, notes=excluded.notes, saved_by=excluded.saved_by;
+
+INSERT INTO restaurant_links (restaurant_id, place_id, google_maps_url, menu_url, image_url, source_url)
+VALUES
+('plan-rest-morimori-kawaramachi', 'plan-place-rest-morimori-kawaramachi', 'https://www.google.com/maps/search/?api=1&query=Mori%20Mori%20Sushi%20Shijo%20Kawaramachi', 'https://www.kyoto-kawaramachigarden.com/en/foodhall/shop_009/', NULL, 'https://www.kyoto-kawaramachigarden.com/en/foodhall/shop_009/'),
+('plan-rest-inoichi-hanare', 'plan-place-rest-inoichi-hanare', 'https://www.google.com/maps/search/?api=1&query=Menya%20Inoichi%20Hanare%20Kyoto', 'https://menyainoichi.net/news/645a5ff1d5cfeb003705f7c1', NULL, 'https://menyainoichi.net/about'),
+('plan-rest-sushiro-namba-amza', 'plan-place-rest-sushiro-namba-amza', 'https://www.google.com/maps/search/?api=1&query=Sushiro%20Namba%20Amza', 'https://www.akindo-sushiro.co.jp/menu/', NULL, 'https://www.akindo-sushiro.co.jp/shop/detail.php?id=2225'),
+('plan-rest-hanamaruken-hozenji', 'plan-place-rest-hanamaruken-hozenji', 'https://www.google.com/maps/search/?api=1&query=Hanamaruken%20Namba%20Hozenji', 'https://tabelog.com/osaka/A2701/A270202/27002618/dtlmenu/', NULL, 'https://tabelog.com/osaka/A2701/A270202/27002618/'),
+('plan-rest-ramen-kassai', 'plan-place-rest-ramen-kassai', 'https://www.google.com/maps/search/?api=1&query=RAMEN%20KASSAI%20Nipponbashi%20Osaka', 'https://tabelog.com/osaka/A2701/A270202/27156013/dtlmenu/', NULL, 'https://tabelog.com/osaka/A2701/A270202/27156013/'),
+('plan-rest-osaka-botejyu', 'plan-place-rest-osaka-botejyu', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Botejyu%20Main%20Store%20Namba', 'https://osaka-botejyu.com/en/menu-en/', NULL, 'https://osaka-botejyu.com/en/shop-en/')
+ON CONFLICT(restaurant_id) DO UPDATE SET
+  place_id=excluded.place_id, google_maps_url=excluded.google_maps_url,
+  menu_url=excluded.menu_url, source_url=excluded.source_url,
+  updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO place_research (place_id, region, suggested_dates_json, best_time, area, source_url, research_note, sort_order)
+VALUES
+('research-place-sanjusangendo', 'Kyoto', '["2026-09-14"]', '09:00–11:00', 'Shichijo · Higashiyama', 'https://kyoto.travel/en/getting-around/comfortable-access-to-higashiyama-sanjusangen-do/', '교토 공식 관광안내가 비 오는 날 후보로 직접 추천하는 실내 비중 높은 사찰. Kiyomizu의 경사/골목 보행을 크게 줄이고 싶을 때.', 250),
+('research-place-kyoto-porta', 'Kyoto', '["2026-09-13","2026-09-15"]', '도착/이동 지연 때', 'Kyoto Station', 'https://www.porta.co.jp/', '교토역 직결. B1 물판 11:00–20:30, 식당 11:00–22:00 중심. 비·캐리어·피로가 겹치면 관광을 억지로 추가하지 않는 회복형 옵션.', 260),
+('research-place-namba-walk', 'Osaka', '["2026-09-15","2026-09-16"]', '비가 강한 오후/저녁', 'Namba · Nipponbashi', 'https://osaka-info.jp/en/spot/namba-walk/', '약 715m 지하상가, Namba와 Nipponbashi를 연결. 야외 Dotonbori 체류를 줄여도 동선이 끊기지 않음.', 340),
+('research-place-denden-town', 'Osaka', '["2026-09-15","2026-09-16"]', '호텔 전후 30–60분', 'Nipponbashi', 'https://osaka-info.jp/en/spot/tourist-information-nihonbashi/', '숙소가 Denden Town 안쪽이라 교통비와 추가 보행이 거의 없는 FLEX. 전자·게임·애니 상점 위주.', 350),
+('research-place-osaka-history', 'Osaka', '["2026-09-16"]', '09:30–16:30', 'Osaka Castle · Tanimachi 4-chome', 'https://osaka-info.jp/en/spot/osaka-museum-history/', '09:30–17:00, 성인 ¥600, 화요일 휴관. 9/16 수요일이라 이용 가능하며 Castle 공원 산책을 줄이는 가장 자연스러운 실내 연계.', 360),
+('research-place-kamigata-ukiyoe', 'Osaka', '["2026-09-15","2026-09-16"]', '11:00–17:30', 'Namba · Hozenji', 'https://osaka-info.jp/en/spot/kamigata-ukiyoe-museum/', '성인 ¥700, 11:00–18:00, 월요일 휴관. 여행의 화/수요일에는 이용 가능하고 Hozenji·Dotonbori에서 거의 벗어나지 않음.', 370),
+('research-place-wahha-kamigata', 'Osaka', '["2026-09-15","2026-09-16"]', '10:00–18:00', 'Namba', 'https://osaka-info.jp/en/spot/museum-of-kamigata-performing-arts/', '무료, 약 30분, 10:00–18:00. 실내에서 오사카 공연문화를 보고 바로 Namba/Dotonbori 일정으로 복귀 가능.', 380),
+('research-place-shitennoji', 'Osaka', '["2026-09-16"]', '08:30–16:30', 'Tennoji · Ebisucho', 'https://osaka-info.jp/en/spot/shitennoji/', '4–9월 중심 가람 08:30–16:30, 성인 ¥500. 숙소 남쪽 권역의 역사 옵션이지만 보행 총량이 늘면 과감히 생략.', 390)
+ON CONFLICT(place_id) DO UPDATE SET
+  region=excluded.region, suggested_dates_json=excluded.suggested_dates_json,
+  best_time=excluded.best_time, area=excluded.area, source_url=excluded.source_url,
+  research_note=excluded.research_note, sort_order=excluded.sort_order,
+  updated_at=CURRENT_TIMESTAMP;
+
+-- Promote the most useful new research into date-level choices so they are
+-- immediately actionable instead of living only in the long research pool.
+UPDATE decision_options
+SET hidden_event_ids_json='["plan-event-0914-kiyomizu-transfer","plan-event-0914-gion-walk"]',
+    updated_at=CURRENT_TIMESTAMP
+WHERE id='decision-opt-0914-manga';
+
+INSERT INTO decision_options (
+  id, decision_slot_id, label, badge, summary, price, duration, route, map_url, source_url, recommended,
+  event_title, event_kind, event_start_time, event_end_time, event_location, event_notes, event_meta_json, hidden_event_ids_json, sort_order
+) VALUES
+('decision-opt-0914-sanjusangendo', 'decision-0914-morning', 'Sanjusangen-do', '비·보행 절약', '긴 본당 내부 관람 비중이 높아 Kiyomizu 경사와 젖은 골목을 크게 줄일 수 있다.', '성인 ¥600', '약 1–1.5시간', 'AMANEK → 버스/Keihan권 → Sanjusangen-do → Gion-Shijo', 'https://www.google.com/maps/search/?api=1&query=Sanjusangen-do%20Kyoto', 'https://kyoto.travel/en/getting-around/comfortable-access-to-higashiyama-sanjusangen-do/', 0, 'Sanjusangen-do · rain Plan B', 'activity', '09:00', '10:35', 'Sanjusangen-do', '강한 비에는 Kiyomizu 경사와 Sannenzaka/Ninenzaka를 빼고 본당 중심으로 관람.', '{"transport":"bus / Keihan + walk","walking":"Kiyomizu안보다 적음","rain":"실내 본당 비중 높음"}', '["plan-event-0914-kiyomizu-transfer","plan-event-0914-gion-walk"]', 30),
+('decision-opt-0915-namba-walk', 'decision-0915-after-lunch', 'Namba Walk 지하상가', '폭우 대안', 'Namba와 Nipponbashi를 지하로 연결해 도톤보리 야외 노출을 줄이면서 쇼핑·휴식을 유지.', NULL, '약 45–60분', 'Nipponbashi ↔ Namba Walk', 'https://www.google.com/maps/search/?api=1&query=Namba%20Walk%20Osaka', 'https://osaka-info.jp/en/spot/namba-walk/', 0, 'Namba Walk · underground rainy route', 'activity', '14:45', '15:45', 'Namba Walk', '폭우면 Dotonbori 낮 산책 대신 지하상가로 이동. Rikuro Namba와도 연결하기 쉬움.', '{"transport":"walk underground","walking":"약 1–2k","rain":"대부분 지하"}', '[]', 30),
+('decision-opt-0915-denden', 'decision-0915-after-lunch', 'Nipponbashi Den Den Town', '숙소 바로 앞', '호텔 주변 전자·게임·애니 상권을 짧게 보고 피곤하면 즉시 숙소로 돌아갈 수 있다.', NULL, '약 45분', 'Nipponbashi hotel → Den Den Town → Namba', 'https://www.google.com/maps/search/?api=1&query=Nipponbashi%20Den%20Den%20Town%20Osaka', 'https://osaka-info.jp/en/spot/tourist-information-nihonbashi/', 0, 'Nipponbashi Den Den Town · short browse', 'activity', '14:45', '15:35', 'Nipponbashi Den Den Town', '오사카 도착 피로가 있거나 Dotonbori를 밤에 집중하고 싶을 때 숙소권에서 짧게.', '{"transport":"walk","walking":"약 1k","rain":"상점 위주"}', '[]', 40),
+('decision-opt-0916-history', 'decision-0916-morning', 'Osaka Museum of History', '비 오는 날 연계', 'Osaka Castle과 같은 Tanimachi 4-chome 권역이라 이동 계획을 거의 바꾸지 않고 실내 비중을 높인다.', '성인 ¥600', '약 1.5시간', 'Tanimachi 4-chome → Osaka Museum of History', 'https://www.google.com/maps/search/?api=1&query=Osaka%20Museum%20of%20History', 'https://osaka-info.jp/en/spot/osaka-museum-history/', 0, 'Osaka Museum of History', 'activity', '09:00', '10:45', 'Osaka Museum of History', '9/16 수요일 이용 가능. 폭우면 Osaka Castle 공원 산책 대신 역사박물관 실내 관람.', '{"transport":"Osaka Metro + short walk","walking":"적음","rain":"실내"}', '[]', 30),
+('decision-opt-0916-ukiyoe', 'decision-0916-after-lunch', 'Kamigata Ukiyo-e Museum', '작은 실내', 'Hozenji 바로 옆이라 15시 Dotonbori 초밥 전 1시간을 비·더위 없이 채우기 좋다.', '성인 ¥700', '약 45–60분', 'Shinsaibashi → Hozenji · Namba', 'https://www.google.com/maps/search/?api=1&query=Kamigata%20Ukiyo-e%20Museum%20Osaka', 'https://osaka-info.jp/en/spot/kamigata-ukiyoe-museum/', 0, 'Kamigata Ukiyo-e Museum', 'activity', '13:10', '14:15', 'Kamigata Ukiyo-e Museum', '야외 쇼핑을 줄이고 작은 실내 문화 일정으로 교체. 이후 Dotonbori까지 바로 이동.', '{"transport":"walk / Metro","walking":"약 1k","rain":"실내"}', '[]', 30),
+('decision-opt-0916-wahha', 'decision-0916-after-lunch', 'Wahha Kamigata', '무료 · 30분', '난바에서 무료로 짧게 보고 다시 Dotonbori로 이동하는 회복형 실내 옵션.', '무료', '약 30–45분', 'Shinsaibashi → Namba YES NAMBA → Dotonbori', 'https://www.google.com/maps/search/?api=1&query=Wahha%20Kamigata%20Osaka', 'https://osaka-info.jp/en/spot/museum-of-kamigata-performing-arts/', 0, 'Wahha Kamigata · short indoor stop', 'activity', '13:15', '14:05', 'Wahha Kamigata', '무료·실내. 체력이나 비 때문에 Shinsaibashi 1.5시간을 다 걷기 싫을 때.', '{"transport":"Metro / walk","walking":"적음","rain":"실내"}', '[]', 40)
+ON CONFLICT(id) DO UPDATE SET
+  decision_slot_id=excluded.decision_slot_id, label=excluded.label, badge=excluded.badge,
+  summary=excluded.summary, price=excluded.price, duration=excluded.duration, route=excluded.route,
+  map_url=excluded.map_url, source_url=excluded.source_url, recommended=excluded.recommended,
+  event_title=excluded.event_title, event_kind=excluded.event_kind,
+  event_start_time=excluded.event_start_time, event_end_time=excluded.event_end_time,
+  event_location=excluded.event_location, event_notes=excluded.event_notes,
+  event_meta_json=excluded.event_meta_json, hidden_event_ids_json=excluded.hidden_event_ids_json,
+  sort_order=excluded.sort_order, updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO meal_slot_options (meal_slot_id, restaurant_id, sort_order)
+VALUES
+('meal-0913-first-sushi', 'plan-rest-morimori-kawaramachi', 40),
+('meal-0914-lunch-sushi', 'plan-rest-morimori-kawaramachi', 40),
+('meal-0914-dinner-ramen', 'plan-rest-inoichi-hanare', 30),
+('meal-0915-lunch-sushi', 'plan-rest-sushiro-namba-amza', 40),
+('meal-0915-dinner-okonomiyaki', 'plan-rest-osaka-botejyu', 40),
+('meal-0915-night-noodle-flex', 'plan-rest-hanamaruken-hozenji', 30),
+('meal-0915-night-noodle-flex', 'plan-rest-osaka-botejyu', 40),
+('meal-0916-afternoon-sushi', 'plan-rest-sushiro-namba-amza', 40),
+('meal-0916-dinner-gyoza', 'plan-rest-hanamaruken-hozenji', 40),
+('meal-0916-dinner-gyoza', 'plan-rest-ramen-kassai', 50)
+ON CONFLICT(meal_slot_id, restaurant_id) DO UPDATE SET sort_order=excluded.sort_order;
+
 -- Initial synchronization for linked preparation states and selected meal slots.
 UPDATE trip_checklist_items
 SET status = CASE WHEN NOT EXISTS (
