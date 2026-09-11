@@ -16,6 +16,24 @@ CREATE TABLE IF NOT EXISTS trip_checklist_items (
 
 CREATE INDEX IF NOT EXISTS idx_trip_checklist_trip ON trip_checklist_items(trip_id, sort_order);
 
+CREATE TABLE IF NOT EXISTS trip_budget_entries (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+  entry_type TEXT NOT NULL DEFAULT 'EXPENSE',
+  amount_jpy INTEGER NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'Travel Wallet',
+  category TEXT,
+  merchant TEXT,
+  occurred_on TEXT NOT NULL,
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_trip_budget_entries_trip ON trip_budget_entries(trip_id, occurred_on, created_at);
+CREATE INDEX IF NOT EXISTS idx_trip_budget_entries_participant ON trip_budget_entries(participant_id, occurred_on, created_at);
+
 CREATE TABLE IF NOT EXISTS restaurants (
   id TEXT PRIMARY KEY,
   trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -173,11 +191,11 @@ CREATE INDEX IF NOT EXISTS idx_decision_options_slot ON decision_options(decisio
 -- Checkable pre-departure work. Re-running this script intentionally preserves status.
 INSERT INTO trip_checklist_items (id, trip_id, title, category, status, notes, url, sort_order)
 VALUES
-('plan-task-haruka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'KIX → Kyoto HARUKA 구매', '예약 · 입국', 'TODO', 'JR-WEST 공식 ¥2,200을 기준으로 Klook/KKday 최종 결제가를 비교하고 더 싼 쪽만 구매', 'https://www.westjr.co.jp/global/en/ticket/westqr/haruka/', 10),
-('plan-task-esim-buy', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '두 사람 eSIM 구매', '통신', 'TODO', '기본 추천: Nomad 5GB/30일 US$10 또는 TravelSim Asia 5GB/30일 US$9.99', NULL, 20),
+('plan-task-haruka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'KIX → Kyoto HARUKA 구매', '예약 · 입국', 'DONE', '2026-09-11 Oosu + Domenic 2인 결제 완료. 9/12 밤 QR/교환 안내만 오프라인 캡처', 'https://www.westjr.co.jp/global/en/ticket/westqr/haruka/', 10),
+('plan-task-esim-buy', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '두 사람 eSIM 구매', '통신', 'TODO', '구매 예정: Stellar eSIM Japan 5GB / 20일 / US$1.75 × 2. 무료 백업: Eskimo 제휴 1GB(만료 없음), Nomad Trial 1GB/3일', 'https://esimdb.com/japan/stellar', 20),
 ('plan-task-esim-install', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'eSIM 프로필 한국에서 설치', '통신', 'TODO', 'Wi-Fi에서 설치하고 QR/설정 화면을 오프라인 캡처. 일본 도착 전 데이터 회선 활성화 조건 확인', NULL, 21),
 ('plan-task-vjw', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Visit Japan Web 등록 + QR 캡처', '예약 · 입국', 'TODO', 'Oosu와 Domenic 각각 입국·세관 정보를 등록하고 QR을 오프라인 저장', 'https://www.vjw.digital.go.jp/', 30),
-('plan-task-insurance', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '여행자보험 확인/가입', '예약 · 입국', 'TODO', '신용카드 해외 의료 보장과 중복 여부를 먼저 확인', 'https://www.japan.travel/en/plan/travel-insurance-in-japan/', 40),
+('plan-task-insurance', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '여행자보험 가입 완료', '예약 · 입국', 'DONE', '우수 · KB손해보험 다이렉트 / 도미닉 · 삼성화재 다이렉트 가입 완료', 'https://www.japan.travel/en/plan/travel-insurance-in-japan/', 40),
 ('plan-task-restaurants', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '식사 후보 선택 + 필요한 식당 예약', '식당 예약', 'TODO', '식사별 후보에서 식당을 선택하고, 선택한 식당이 예약 권장인 경우 BOOKED로 변경', NULL, 50),
 ('plan-task-plug', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '일본 Type-A 돼지코 2개 이상', '준비물', 'TODO', '충전기 입력이 100–240V인지 확인. 일본은 100V', NULL, 60),
 ('plan-task-rain', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '접이식 우산 + 얇은 방수 겉옷', '준비물', 'TODO', '비를 기본 전제로 하되 덥고 습한 9월이라 가벼운 장비 우선', NULL, 61),
@@ -190,6 +208,16 @@ ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, title=excluded.title, category=excluded.category,
   notes=excluded.notes, url=excluded.url, sort_order=excluded.sort_order,
   updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO trip_budget_entries (id, trip_id, participant_id, entry_type, amount_jpy, payment_method, category, merchant, occurred_on, notes, source)
+SELECT 'budget-oosu-travelwallet-initial', t.id, p.id, 'BUDGET', 20000, 'Travel Wallet', '환전 · 충전', 'Travel Wallet 초기 환전', '2026-09-11', '출국 전 ¥20,000 환전 완료', 'user-2026-09-11'
+FROM trips t JOIN participants p ON p.trip_id=t.id WHERE t.title='Kyoto · Osaka 2026' AND p.name='Oosu'
+ON CONFLICT(id) DO UPDATE SET amount_jpy=excluded.amount_jpy, payment_method=excluded.payment_method, notes=excluded.notes, updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO trip_budget_entries (id, trip_id, participant_id, entry_type, amount_jpy, payment_method, category, merchant, occurred_on, notes, source)
+SELECT 'budget-domenic-travelwallet-initial', t.id, p.id, 'BUDGET', 20000, 'Travel Wallet', '환전 · 충전', 'Travel Wallet 초기 환전', '2026-09-11', '출국 전 ¥20,000 환전 완료', 'user-2026-09-11'
+FROM trips t JOIN participants p ON p.trip_id=t.id WHERE t.title='Kyoto · Osaka 2026' AND p.name='Domenic'
+ON CONFLICT(id) DO UPDATE SET amount_jpy=excluded.amount_jpy, payment_method=excluded.payment_method, notes=excluded.notes, updated_at=CURRENT_TIMESTAMP;
 
 -- Restaurants. Re-running preserves reservation_status so BOOKED remains BOOKED.
 INSERT INTO restaurants (
@@ -385,9 +413,9 @@ VALUES
 ('plan-transport-kyoto-osaka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'transport', 'Kyoto → Osaka', 'Keihan + Osaka Metro', 'Kiyomizu-Gojo에서 Keihan으로 Kitahama 방면(열차에 따라 환승) → Osaka Metro Sakaisuji Line으로 Ebisucho. 신칸센은 비용·역 접근상 제외.', 30),
 ('plan-transport-osaka-local', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'transport', 'Osaka local', 'Metro + 도보', 'Nipponbashi/Ebisucho 숙소를 기준으로 Namba·Dotonbori는 도보권. Osaka Castle만 지하철 이동. 비에는 Shinsaibashi/Dotonbori 상가를 피난 동선으로 활용.', 40),
 ('plan-transport-osaka-kix', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'transport', 'Osaka → KIX', 'Sakaisuji Line + Nankai Airport Express', 'Ebisucho→Tengachaya 지하철, Tengachaya→KIX는 Nankai Airport Express. 07:15 숙소 출발, 08:45–09:00 KIX 도착 목표. Rapi:t은 지연/시간 위험 때만.', 50),
-('plan-connect-esim', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'eSIM 5GB each', 'Nomad US$10 / TravelSim Asia US$9.99', '5일간 지도·번역·mytrip 사용 기준 5GB가 안전. Nomad는 KDDI au/SoftBank, tethering 가능. 최저 공개가는 TravelSim Asia 5GB/30d US$9.99.', 10),
+('plan-connect-esim', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'eSIM 5GB each', 'Stellar US$1.75 × 2 예정', '메인: Stellar eSIM Japan 5GB / 20일을 Oosu와 Domenic 각각 1개 구매 예정. 백업은 Eskimo 제휴 링크 무료 1GB(제휴 가입 화면에서 1GB 문구 확인 시)와 Nomad Trial 무료 1GB/3일.', 10),
 ('plan-connect-icoca', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'ICOCA / card tap', 'ICOCA remains the safest default', '신용카드 터치결제는 이번 동선에서 부분 지원만 된다. Osaka Metro는 Visa/Mastercard/JCB/Amex/Diners/Discover/UnionPay 터치결제를 지원하고, Nankai도 대응역의 전용 개찰기에서 지원한다. 하지만 2026-09 현재 Kyoto City Bus/Subway는 신용카드 tap 미지원(2027 도입 목표), Keihan도 신용카드 tap 운임결제 미지원. 따라서 교토+Keihan까지 끊김 없이 쓰려면 ICOCA/호환 교통계 IC가 가장 안전하다.', 20),
-('plan-connect-haruka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'HARUKA price rule', '¥2,200 ceiling', 'Klook/KKday는 정적 페이지에서 9/13 KIX→Kyoto 성인 최종가가 노출되지 않아 결제 직전 확인 필수. KKday 앱 첫구매 쿠폰은 조건부이며 할인 후 실결제가로 비교.', 30)
+('plan-connect-haruka', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'connectivity', 'HARUKA', '2인 구매 완료', '2026-09-11 KIX→Kyoto HARUKA 2인 결제 완료. 추가 구매 비교는 종료하고 QR/교환 안내만 오프라인 저장.', 30)
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, section=excluded.section, title=excluded.title,
   subtitle=excluded.subtitle, details=excluded.details, sort_order=excluded.sort_order,
@@ -411,9 +439,12 @@ INSERT INTO trip_options (
 ('opt-osaka-amazing', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', 'Osaka Amazing Pass', '¥3,500 / 1일', 'Osaka Metro 계열 교통 + 약 40개 관광시설', 'Osaka Castle 외 유료 명소를 많이 넣지 않는 현재 일정에는 과함', '관광지 수를 늘리지 않는 원칙 때문에 비추천', 'https://osaka-amazing-pass.com/en/howto_about_1day.html', 'https://osaka-amazing-pass.com/en/howto_about_1day.html', '공식 구매', 0, 40),
 ('opt-osaka-keihan-metro', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'osaka_transport', '오사카 교통', 'Keihan + Osaka Metro 1-Day', '¥2,160', 'Keihan 지정 구간 + Osaka Metro 1일', '9/15 편도 Keihan + 짧은 Metro만 쓰므로 회수 어려움', '현재 일정에서는 종량제 유지', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', 'https://www.keihan.co.jp/travel/kr/trains/passes-for-visitors-to-japan/kyoto-osaka.html', '공식 정보', 0, 50),
 
-('opt-esim-nomad', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Nomad Japan 5GB', 'US$10 / 30일', 'KDDI au + SoftBank · hotspot 가능 · 60일 내 활성화', '5일 여행에 5GB면 지도·번역·MyTrip 사용에 충분', '가격/망/설치 편의 균형이 좋아 기본 추천', 'https://www.nomadesim.com/japan-eSIM/5gb-30day', 'https://www.nomadesim.com/japan-eSIM/5gb-30day', 'Nomad 구매', 1, 10),
-('opt-esim-ubigi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Ubigi Japan 5GB', '¥1,700 / 15일', 'KDDI + NTT Docomo · Smartstart · tethering 가능', '일본 통신사 조합이 좋고 15일이면 충분', '엔화 가격이 Nomad보다 매력적이면 선택', 'https://cellulardata.ubigi.com/ko/rates-and-coverage/japan-esim-data-plans/%EC%9D%BC%EB%B3%B8-5-gb-15%EC%9D%BC/', 'https://cellulardata.ubigi.com/ko/rates-and-coverage/japan-esim-data-plans/%EC%9D%BC%EB%B3%B8-5-gb-15%EC%9D%BC/', 'Ubigi 구매', 0, 20),
-('opt-esim-saily', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Saily Japan 5GB', 'US$10.99 / 30일', 'KDDI·SoftBank 등 · 4G/5G · hotspot 가능', '기능은 충분하지만 현재 공개가는 Nomad보다 약간 높음', '앱/보안기능 선호 시 대안', 'https://saily.com/ko/esim-japan/', 'https://saily.com/ko/esim-japan/', 'Saily 구매', 0, 30)
+('opt-esim-stellar', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Stellar eSIM · Japan 5GB / 20일', 'US$1.75 / 1인 · 2개 구매 예정', '첨부한 비교 화면 기준 Japan 5GB / 20일 상품 · 5G 표기', 'Oosu와 Domenic 각각 5GB면 4박 5일 지도·번역·MyTrip 사용에 충분', '현재 메인 선택. 두 사람 각각 1개 구매 후 한국에서 설치', 'https://esimdb.com/japan/stellar', 'https://stellarsecurity.com/stellar-esim/japan-and-south-korea-esim/', 'Stellar 확인', 1, 5),
+('opt-esim-eskimo-free', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Eskimo · 제휴 무료 1GB', '무료 / 1GB · 만료 없음', '신규 가입자용 제휴 giveaway · 고정 데이터는 만료 없음', 'Stellar 장애/소진 때 지도·메신저용 비상 데이터로 적합', '백업 1순위. 반드시 제휴 링크로 들어간 공식 가입 화면에서 무료 1GB 문구를 확인한 뒤 신청', 'https://www.eskimo.travel/en/affiliate', 'https://www.eskimo.travel/en/affiliate', '제휴 1GB 확인', 0, 10),
+('opt-esim-nomad-trial', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Nomad Trial · 무료 1GB / 3일', '무료 / 1GB · 3일', '신규 사용자 · 일본 포함 · Nomad 앱에서 신청 · 신용카드 불필요', '여행 중반/후반 Stellar 문제 발생 시 3일짜리 비상 회선으로 적합', '백업 2순위. 무료 Trial 사용자는 이후 일부 첫구매 프로모션 대상에서 제외될 수 있음', 'https://www.nomadesim.com/documents/landing-trial-plan', 'https://www.nomadesim.com/documents/landing-trial-plan', '무료 체험', 0, 20),
+('opt-esim-nomad', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Nomad Japan 5GB · 유료 대안', 'US$10 / 30일', 'KDDI au + SoftBank · hotspot 가능 · 60일 내 활성화', '무료 백업까지 실패하거나 Stellar 구매가 막힐 때만 필요', '기존 유료 fallback', 'https://www.nomadesim.com/japan-eSIM/5gb-30day', 'https://www.nomadesim.com/japan-eSIM/5gb-30day', 'Nomad 구매', 0, 30),
+('opt-esim-ubigi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Ubigi Japan 5GB · 유료 대안', '¥1,700 / 15일', 'KDDI + NTT Docomo · Smartstart · tethering 가능', '일본 통신사 조합이 좋지만 현재 Stellar보다 훨씬 비쌈', '유료 fallback', 'https://cellulardata.ubigi.com/ko/rates-and-coverage/japan-esim-data-plans/%EC%9D%BC%EB%B3%B8-5-gb-15%EC%9D%BC/', 'https://cellulardata.ubigi.com/ko/rates-and-coverage/japan-esim-data-plans/%EC%9D%BC%EB%B3%B8-5-gb-15%EC%9D%BC/', 'Ubigi 구매', 0, 40),
+('opt-esim-saily', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'esim', 'eSIM', 'Saily Japan 5GB · 유료 대안', 'US$10.99 / 30일', 'KDDI·SoftBank 등 · 4G/5G · hotspot 가능', '기능은 충분하지만 현재 메인/무료 백업보다 비용 우위 없음', '유료 fallback', 'https://saily.com/ko/esim-japan/', 'https://saily.com/ko/esim-japan/', 'Saily 구매', 0, 50)
 ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, group_key=excluded.group_key, group_title=excluded.group_title,
   name=excluded.name, price=excluded.price, coverage=excluded.coverage, fit=excluded.fit,
@@ -921,10 +952,56 @@ VALUES
 ('plan-event-0915-animate', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'animate Osaka Nippombashi · 애니 굿즈', 'activity', '2026-09-15', '16:35', '17:05', 'animate Osaka Nippombashi', '1-1-3 Nipponbashinishi, Naniwa Ward, Osaka 556-0004, Japan', NULL, NULL, '서일본권 대형 애니메이트. 캐릭터 굿즈·피규어·트레이딩카드 위주로 30분만 보고 과소비는 피한다.', 'travel-plan-2026', 62, '{"transport":"Rikuro Namba → 도보","walking":"약 8–10분","rain":"매장 실내","shopping":"굿즈는 예산 상한 먼저 정하기"}'),
 ('plan-event-0915-surugaya', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Surugaya Otaroad · 중고/애니 잡화', 'activity', '2026-09-15', '17:10', '17:40', 'Surugaya Otaroad Anime & Hobby', '3-8-18 Nipponbashi, Naniwa Ward, Osaka, Japan', NULL, NULL, 'Animate에서 못 찾은 굿즈나 중고 피규어·잡화를 비교. 2F/3F 핵심만 보고 30분 제한.', 'travel-plan-2026', 63, '{"transport":"walk","walking":"짧음","rain":"실내","shopping":"중고품 상태/가격 비교"}'),
 ('plan-event-0915-denden-core', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Den Den Town · Ota Road 핵심 구간', 'activity', '2026-09-15', '17:40', '17:55', 'Den Den Town · Ota Road core', '4 Chome-10-10 Nipponbashi, Naniwa Ward, Osaka, 556-0005, Japan', NULL, NULL, '사용자가 찾은 4 Chome-10-10 기준으로 전자·애니·잡화 거리 분위기를 짧게 본다. 이미 두 매장을 봤으므로 목적 없이 오래 돌지 않는다.', 'travel-plan-2026', 64, '{"transport":"walk","walking":"약 300–500m","rain":"상점 처마/매장 위주"}'),
-('plan-event-0915-familymart-snack', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'FamilyMart · 편의점 쇼핑 + 간식', 'activity', '2026-09-15', '17:55', '18:10', 'FamilyMart Nipponbashi 4-chome', '4-10-8 Nipponbashi, Naniwa Ward, Osaka, Japan', NULL, NULL, '물·주먹밥·푸딩·아이스·じゃがりこ 같은 편의점 간식을 사고 10–15분 쉬기. 18:30 CHIBO를 위해 과식하지 않는다.', 'travel-plan-2026', 65, '{"transport":"Den Den Town 바로 옆","walking":"거의 없음","rain":"실내","food":"간식만, 저녁 여유 남기기"}'),
-('plan-event-0916-matsukiyo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Matsumoto Kiyoshi · 드럭스토어 쇼핑', 'activity', '2026-09-16', '20:15', '20:45', 'Matsumoto Kiyoshi Shinsaibashi AG', '2-5-1 Shinsaibashisuji, Chuo Ward, Osaka 542-0085, Japan', NULL, NULL, '마지막 밤에 Melano CC·Biore UV·과자 선물을 한 번에 구매. 30분 제한, 면세 조건은 현장 표시 확인.', 'travel-plan-2026', 75, '{"transport":"Osaka Ohsho → Shinsaibashi 도보/짧은 이동","walking":"약 1k","rain":"매장 실내","shopping":"가격 가이드 탭 확인"}')
+('plan-event-0915-familymart-snack', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'FamilyMart · 푸딩/산도 간식', 'activity', '2026-09-15', '17:55', '18:10', 'FamilyMart Nipponbashi 4-chome', '4-10-8 Nipponbashi, Naniwa Ward, Osaka, Japan', NULL, NULL, 'こく生プリン·窯出しとろけるプリン·간사이 계란말이 햄 산도처럼 냉장 코너에서 그날 바로 먹을 것을 고른다. 18:30 CHIBO가 있으니 둘이 1–2개만 나눠 먹기.', 'travel-plan-2026', 65, '{"transport":"Den Den Town 바로 옆","walking":"거의 없음","rain":"실내","food":"푸딩/산도 위주 · 저녁 여유 남기기"}'),
+('plan-event-0916-matsukiyo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Matsumoto Kiyoshi · 과자/선물 쇼핑', 'activity', '2026-09-16', '20:15', '20:45', 'Matsumoto Kiyoshi Shinsaibashi AG', '2-5-1 Shinsaibashisuji, Chuo Ward, Osaka 542-0085, Japan', NULL, NULL, '마지막 밤에 KitKat·Pocky·Alfort·Black Thunder 같은 상온 과자를 편의점보다 먼저 가격 비교해 구매. 30분 안에 선물용 과자 중심으로 끝낸다.', 'travel-plan-2026', 75, '{"transport":"Osaka Ohsho → Shinsaibashi 도보/짧은 이동","walking":"약 1k","rain":"매장 실내","shopping":"상온 과자 · 편의점보다 드럭스토어 가격 우선 비교"}')
 ON CONFLICT(id) DO UPDATE SET trip_id=excluded.trip_id, title=excluded.title, kind=excluded.kind, date=excluded.date, start_time=excluded.start_time, end_time=excluded.end_time, location=excluded.location, address=excluded.address, notes=excluded.notes, source=excluded.source, sort_order=excluded.sort_order, meta_json=excluded.meta_json, updated_at=CURRENT_TIMESTAMP;
 
 UPDATE events SET start_time='20:55', end_time='21:30', title='Optional · final Dotonbori night', notes='드럭스토어 쇼핑 뒤 마지막 야경. 이미 충분히 봤거나 피곤하면 삭제하고 숙소로 복귀.', updated_at=CURRENT_TIMESTAMP WHERE id='plan-event-0916-dotonbori-final';
+
+-- Final meal-choice pass: every core meal keeps a sushi or fish-bowl comparison
+-- option while preserving any restaurant the traveler has already selected.
+INSERT INTO restaurants (
+  id, trip_id, name, city, planned_date, planned_time, hours, price_range,
+  reservation_action, reservation_status, reservation_channel, reservation_url,
+  notes, dietary_notes, sort_order
+) VALUES
+('plan-rest-nakau-kawaramachi-gojo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Nakau Kawaramachi Gojo', 'Kyoto', NULL, NULL, '04:00–익일 03:00 · 03:00–04:00 휴업', '참치 타타키동 보통 ¥790 · 약 ¥800–¥1,200/인', 'WALK-IN ONLY', 'WALK-IN', 'walk-in', 'https://maps.zensho.co.jp/jp/detail/2134.html', 'AMANEK과 Kiyomizu-Gojo 사이의 이른 아침 대안. 호텔 조식 대신 생선 덮밥을 원할 때 참치 타타키동으로 간단히 먹고 Fushimi 이동 동선을 유지한다.', 'Domenic은 기본 まぐろのたたき丼처럼 참치만 들어간 bowl을 선택하고 우니·새우/게·조개·오징어/문어가 섞인 메뉴는 제외. Oosu는 매운 유케 계열을 피하고 와사비는 별도로.', 280),
+('plan-rest-sushiro-shinsaibashi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushiro Shinsaibashi', 'Osaka', NULL, NULL, '월–금 11:00–23:00 / 주말·공휴일 10:30–23:00 · L.O. 30분 전', '한 접시 ¥150부터 · 약 ¥1,000–¥3,000/인', 'RESERVE NOW', 'TODO', 'Sushiro 공식 앱 / LINE 접수', 'https://www.akindo-sushiro.co.jp/shop/detail.php?id=2266', 'Shinsaibashi역 도보 약 3분. 9/16 함박 아점과 같은 권역에서 비교할 수 있는 저예산 회전초밥 대안.', 'Domenic은 참치·연어·도미·방어·흰살생선 중심. 우니·새우/게·조개류·오징어/문어 등 생선 외 해산물 제외. Oosu는 매운 소스/고추 토핑 제외.', 290)
+ON CONFLICT(id) DO UPDATE SET
+  trip_id=excluded.trip_id, name=excluded.name, city=excluded.city,
+  hours=excluded.hours, price_range=excluded.price_range,
+  reservation_action=excluded.reservation_action, reservation_channel=excluded.reservation_channel,
+  reservation_url=excluded.reservation_url, notes=excluded.notes,
+  dietary_notes=excluded.dietary_notes, sort_order=excluded.sort_order,
+  updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO places (id, trip_id, name, category, address, lat, lng, notes, saved_by)
+VALUES
+('plan-place-rest-nakau-kawaramachi-gojo', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Nakau Kawaramachi Gojo', 'restaurant', '843 Otabisho-maecho, Kawaramachi-dori Gojo-agaru, Shimogyo Ward, Kyoto 600-8020, Japan', NULL, NULL, '04:00부터 · 참치 타타키동 · AMANEK/Kiyomizu-Gojo 도보권', 'research-2026-09-11'),
+('plan-place-rest-sushiro-shinsaibashi', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Sushiro Shinsaibashi', 'restaurant', 'FPG links SHINSAIBASHI 3F, 3-10-11 Minamisenba, Chuo Ward, Osaka 542-0081, Japan', NULL, NULL, '회전초밥 · Shinsaibashi역 도보 3분 · ¥150/접시부터', 'research-2026-09-11')
+ON CONFLICT(id) DO UPDATE SET trip_id=excluded.trip_id, name=excluded.name, category=excluded.category, address=excluded.address, notes=excluded.notes, saved_by=excluded.saved_by;
+
+INSERT INTO restaurant_links (restaurant_id, place_id, google_maps_url, menu_url, image_url, source_url)
+VALUES
+('plan-rest-nakau-kawaramachi-gojo', 'plan-place-rest-nakau-kawaramachi-gojo', 'https://www.google.com/maps/search/?api=1&query=Nakau%20Kawaramachi%20Gojo%20Kyoto', 'https://www.nakau.co.jp/jp/menu/category/2.html', NULL, 'https://maps.zensho.co.jp/jp/detail/2134.html'),
+('plan-rest-sushiro-shinsaibashi', 'plan-place-rest-sushiro-shinsaibashi', 'https://www.google.com/maps/search/?api=1&query=Sushiro%20Shinsaibashi%20Osaka', 'https://www.akindo-sushiro.co.jp/menu/', 'https://www.akindo-sushiro.co.jp/shared/images/ogp.png?260319', 'https://www.akindo-sushiro.co.jp/shop/detail.php?id=2266')
+ON CONFLICT(restaurant_id) DO UPDATE SET place_id=excluded.place_id, google_maps_url=excluded.google_maps_url, menu_url=excluded.menu_url, image_url=COALESCE(excluded.image_url, restaurant_links.image_url), source_url=excluded.source_url, updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO meal_slot_options (meal_slot_id, restaurant_id, sort_order)
+VALUES
+('meal-0913-arrival-brunch', 'plan-rest-kura-teramachi', 40),
+('meal-0913-arrival-brunch', 'plan-rest-musashi-sanjo', 50),
+('meal-0913-first-sushi', 'plan-rest-katsukura-teramachi', 50),
+('meal-0913-evening-flex', 'plan-rest-musashi-sanjo', 40),
+('meal-0913-evening-flex', 'plan-rest-kura-teramachi', 50),
+('meal-0914-late-lunch', 'plan-rest-sushiro-gion', 40),
+('meal-0914-late-lunch', 'plan-rest-morimori-kawaramachi', 50),
+('meal-0914-dinner-ramen', 'plan-rest-musashi-sanjo', 40),
+('meal-0914-dinner-ramen', 'plan-rest-kura-teramachi', 50),
+('meal-0915-breakfast-amanek', 'plan-rest-nakau-kawaramachi-gojo', 20),
+('meal-0915-dinner-okonomiyaki', 'plan-rest-sushiro-namba-amza', 50),
+('meal-0916-lunch-hamburg', 'plan-rest-sushiro-shinsaibashi', 30),
+('meal-0916-dinner-gyoza', 'plan-rest-sushiro-namba-amza', 60)
+ON CONFLICT(meal_slot_id, restaurant_id) DO UPDATE SET sort_order=excluded.sort_order;
 
 COMMIT;

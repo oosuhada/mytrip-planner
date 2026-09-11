@@ -60,6 +60,65 @@ app.post('/api/trips/:id/participants', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+const budgetEntrySchema = z.object({
+  id: z.string().min(1).max(120).optional(),
+  participant_id: z.string().min(1),
+  entry_type: z.enum(['BUDGET', 'EXPENSE']),
+  amount_jpy: z.number().int().positive().max(100_000_000),
+  payment_method: z.string().trim().min(1).max(80),
+  category: z.string().trim().max(80).optional().nullable(),
+  merchant: z.string().trim().max(140).optional().nullable(),
+  occurred_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  notes: z.string().trim().max(500).optional().nullable(),
+});
+
+app.post('/api/trips/:id/budget/entries', (req, res) => {
+  const parsed = budgetEntrySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const participant = db.prepare('SELECT id FROM participants WHERE id = ? AND trip_id = ?').get(parsed.data.participant_id, req.params.id);
+  if (!participant) return res.status(400).json({ error: 'Participant is not part of this trip' });
+  const entryId = parsed.data.id || id();
+  db.prepare(`
+    INSERT INTO trip_budget_entries (
+      id, trip_id, participant_id, entry_type, amount_jpy, payment_method,
+      category, merchant, occurred_on, notes, source
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO NOTHING
+  `).run(
+    entryId, req.params.id, parsed.data.participant_id, parsed.data.entry_type,
+    parsed.data.amount_jpy, parsed.data.payment_method, parsed.data.category || null,
+    parsed.data.merchant || null, parsed.data.occurred_on, parsed.data.notes || null, 'manual'
+  );
+  emitTrip(req.params.id);
+  res.status(201).json({ id: entryId });
+});
+
+app.patch('/api/budget/entries/:id', (req, res) => {
+  const existing = db.prepare('SELECT * FROM trip_budget_entries WHERE id = ?').get(req.params.id) as any;
+  if (!existing) return res.status(404).json({ error: 'Budget entry not found' });
+  const parsed = budgetEntrySchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (parsed.data.participant_id) {
+    const participant = db.prepare('SELECT id FROM participants WHERE id = ? AND trip_id = ?').get(parsed.data.participant_id, existing.trip_id);
+    if (!participant) return res.status(400).json({ error: 'Participant is not part of this trip' });
+  }
+  const allowed = ['participant_id', 'entry_type', 'amount_jpy', 'payment_method', 'category', 'merchant', 'occurred_on', 'notes'] as const;
+  const updates = Object.entries(parsed.data).filter(([key, value]) => key !== 'id' && allowed.includes(key as any) && value !== undefined);
+  if (!updates.length) return res.json({ ok: true });
+  db.prepare(`UPDATE trip_budget_entries SET ${updates.map(([key]) => `${key} = ?`).join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(...updates.map(([, value]) => value), req.params.id);
+  emitTrip(existing.trip_id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/budget/entries/:id', (req, res) => {
+  const existing = db.prepare('SELECT trip_id FROM trip_budget_entries WHERE id = ?').get(req.params.id) as any;
+  if (!existing) return res.status(404).json({ error: 'Budget entry not found' });
+  db.prepare('DELETE FROM trip_budget_entries WHERE id = ?').run(req.params.id);
+  emitTrip(existing.trip_id);
+  res.json({ ok: true });
+});
+
 app.post('/api/trips/:id/events', async (req, res) => {
   const body = req.body;
   if (!body.title || !body.date) return res.status(400).json({ error: 'title and date are required' });
@@ -223,6 +282,15 @@ app.post('/api/trips/:id/ai/ideas', async (req, res) => {
     })),
     candidates: (trip.places || []).map((place: any) => ({ name: place.name, category: place.category, votes: place.vote_score, notes: place.notes, region: place.research?.region, suggested_dates: place.research?.suggested_dates, best_time: place.research?.best_time, research_note: place.research?.note })),
     checklist: (trip.checklist || []).map((item: any) => ({ title: item.title, category: item.category, status: item.status, notes: item.notes })),
+    budget: (trip.budget_entries || []).map((entry: any) => ({
+      traveler: (trip.participants || []).find((person: any) => person.id === entry.participant_id)?.name || entry.participant_id,
+      type: entry.entry_type,
+      amount_jpy: entry.amount_jpy,
+      payment_method: entry.payment_method,
+      category: entry.category,
+      merchant: entry.merchant,
+      occurred_on: entry.occurred_on,
+    })),
     packing: {
       bags: (trip.packing_bags || []).map((bag: any) => ({ name: bag.name, items: (trip.packing || []).filter((item: any) => item.bag_id === bag.id).length, limit_kg: bag.weight_limit })),
       unchecked: (trip.packing || []).filter((item: any) => !item.checked).map((item: any) => ({ label: item.label, bag: (bags.get(item.bag_id) as any)?.name || '미배정', reason: item.reason })),

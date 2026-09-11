@@ -3,8 +3,8 @@ import { DndContext, DragEndEvent, PointerSensor, useDraggable, useDroppable, us
 import { io } from 'socket.io-client';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, Copy, ExternalLink, GripVertical,
-  ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
+  ClipboardCheck, CreditCard, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
+  AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, Receipt, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, Wallet, WifiOff, X,
 } from 'lucide-react';
 import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, clearOfflineTripData, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripRevision, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripRevision, writeTripSnapshot, writeWeatherSnapshot } from './api';
 import type { OfflinePackInfo } from './api';
@@ -91,7 +91,7 @@ function HomePage() {
 }
 
 type WorkspaceMode = 'plan' | 'trip';
-type Tab = 'today' | 'trip-weather' | 'phrases' | 'shopping-guide' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type Tab = 'today' | 'trip-weather' | 'phrases' | 'shopping-guide' | 'budget' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 type TripPhraseCategoryId = 'all' | 'restaurant' | 'diet' | 'transport' | 'hotel' | 'shopping' | 'help' | 'airport' | 'convenience' | 'sightseeing' | 'health' | 'emergency';
 type TripEventStatus = 'PLANNED' | 'DONE' | 'SKIPPED' | 'CANCELLED';
 type TripLiveGroup = { id: string; title: string; events: TripEvent[] };
@@ -119,6 +119,8 @@ function TripPage({ tripId }: { tripId: string }) {
   const [syncState, setSyncState] = useState({ online: navigator.onLine, pending: 0, failed: false });
   const [offlinePack, setOfflinePack] = useState<OfflinePackInfo | null>(null);
   const [offlinePacking, setOfflinePacking] = useState(false);
+  const [offlineResetting, setOfflineResetting] = useState(false);
+  const [offlineResetMessage, setOfflineResetMessage] = useState('');
   const [offlinePackError, setOfflinePackError] = useState('');
 
   const load = useCallback(async (forceNetwork = false) => {
@@ -191,6 +193,7 @@ function TripPage({ tripId }: { tripId: string }) {
   async function saveOfflinePack() {
     if (!trip || offlinePacking || !navigator.onLine) return;
     setOfflinePacking(true);
+    setOfflineResetMessage('');
     setOfflinePackError('');
     try {
       if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
@@ -203,15 +206,24 @@ function TripPage({ tripId }: { tripId: string }) {
   }
 
   async function resetOfflineData() {
-    if (!trip || !navigator.onLine) return;
+    if (!trip || !navigator.onLine || offlineResetting) return;
     if (!window.confirm('이 기기의 여행 스냅샷과 오프라인 팩을 지우고 서버에서 다시 받을까요? 동기화 대기 중인 변경사항은 지우지 않습니다.')) return;
+    setOfflineResetting(true);
+    setOfflineResetMessage('');
     setOfflinePackError('');
-    await clearOfflineTripData(trip.id);
-    setOfflinePack(null);
-    setWeather([]);
-    setWeatherHours([]);
-    await load(true);
-    await loadWeather(trip, true).catch(() => undefined);
+    try {
+      await clearOfflineTripData(trip.id);
+      setOfflinePack(null);
+      setWeather([]);
+      setWeatherHours([]);
+      await load(true);
+      await loadWeather(trip, true);
+      setOfflineResetMessage('로컬 데이터 초기화 완료 · 서버 최신 일정으로 다시 불러왔습니다.');
+    } catch (error) {
+      setOfflinePackError(error instanceof Error ? error.message : '로컬 데이터를 초기화하지 못했습니다.');
+    } finally {
+      setOfflineResetting(false);
+    }
   }
 
   useEffect(() => {
@@ -249,6 +261,7 @@ function TripPage({ tripId }: { tripId: string }) {
         <nav>
           {workspaceMode === 'plan' ? <>
             <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="준비 · 예약" onClick={() => selectTab('guide')} />
+            <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
             <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정 편집" onClick={() => selectTab('schedule')} />
             <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 결정" onClick={() => selectTab('votes')} count={trip.places.length} />
             <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 리서치" onClick={() => selectTab('map')} />
@@ -260,6 +273,7 @@ function TripPage({ tripId }: { tripId: string }) {
             <NavButton active={tab === 'trip-weather'} icon={<CloudRain />} label="날씨 · 오늘의 코디" onClick={() => selectTab('trip-weather')} />
             <NavButton active={tab === 'phrases'} icon={<MessageCircle />} label="일본어 표현" onClick={() => selectTab('phrases')} />
             <NavButton active={tab === 'shopping-guide'} icon={<ShoppingBag />} label="쇼핑 리스트" onClick={() => selectTab('shopping-guide')} />
+            <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
             <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
           </>}
         </nav>
@@ -273,13 +287,14 @@ function TripPage({ tripId }: { tripId: string }) {
 
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
-        <OfflinePackBar info={offlinePack} saving={offlinePacking} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
+        <OfflinePackBar info={offlinePack} saving={offlinePacking} resetting={offlineResetting} resetMessage={offlineResetMessage} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
         {(!syncState.online || syncState.pending > 0 || syncState.failed) && <div className={`sync-status-bar ${syncState.online ? 'syncing' : 'offline'}`}><span>{syncState.online ? <RefreshCw size={14}/> : <WifiOff size={14}/>}<b>{syncState.online ? (syncState.failed ? '동기화 재시도 필요' : '변경 동기화 중') : '오프라인'}</b>{syncState.pending > 0 && <em>{syncState.pending}개 변경 대기</em>}</span><small>{syncState.online ? '연결된 상태에서 자동 저장합니다.' : '일정 변경은 이 기기에 저장하고 연결되면 자동 반영합니다.'}</small></div>}
         <div className="content-area">
           {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} weatherHours={weatherHours} reload={reload} onOpenTab={selectTab} />}
           {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
           {workspaceMode === 'trip' && tab === 'shopping-guide' && <TripShoppingGuidePanel trip={trip} />}
+          {tab === 'budget' && <BudgetLedgerPanel trip={trip} reload={reload} />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={reload} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={reload} tripMode={workspaceMode === 'trip'} />}
           {tab === 'map' && (workspaceMode === 'trip' ? <TripFieldMapPanel trip={trip} online={syncState.online} /> : <DiscoverPanel trip={trip} plannerName={plannerName} reload={reload} />)}
@@ -390,6 +405,7 @@ function ModeSwitcher({ mode, onSelect }: { mode: WorkspaceMode; onSelect: (mode
 function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void }) {
   const items: Array<[Tab, React.ReactNode, string, number?]> = mode === 'plan' ? [
     ['guide', <ClipboardCheck/>, '준비 · 예약'],
+    ['budget', <Wallet/>, '예산 · 지출'],
     ['schedule', <CalendarDays/>, '일정 편집'],
     ['votes', <Vote/>, '후보 · 결정', trip.places.length],
     ['map', <Compass/>, '지도 · 리서치'],
@@ -401,6 +417,7 @@ function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelect
     ['trip-weather', <CloudRain/>, '날씨 · 오늘의 코디'],
     ['phrases', <MessageCircle/>, '일본어 표현'],
     ['shopping-guide', <ShoppingBag/>, '쇼핑 리스트'],
+    ['budget', <Wallet/>, '예산 · 지출'],
     ['map', <MapPin/>, '지도'],
   ];
   return <div className="mobile-menu-backdrop" onMouseDown={onClose}>
@@ -428,13 +445,15 @@ function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { 
   </header>;
 }
 
-function OfflinePackBar({ info, saving, online, error, onSave, onReset }: { info: OfflinePackInfo | null; saving: boolean; online: boolean; error: string; onSave: () => void; onReset: () => void }) {
+function OfflinePackBar({ info, saving, resetting, resetMessage, online, error, onSave, onReset }: { info: OfflinePackInfo | null; saving: boolean; resetting: boolean; resetMessage: string; online: boolean; error: string; onSave: () => void; onReset: () => void }) {
   const stale = Boolean(info && Date.now() - info.saved_at > 12 * 60 * 60 * 1000);
   const savedAt = info ? new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(info.saved_at)) : '';
   const storage = info?.storage_bytes ? formatBytes(info.storage_bytes) : null;
-  return <div className={`offline-pack-bar ${info ? 'ready' : 'empty'} ${!online ? 'offline' : ''} ${error ? 'error' : ''}`}>
-    <div className="offline-pack-copy"><span className="offline-pack-icon">{error ? <AlertTriangle size={16}/> : info ? <Check size={16}/> : <Download size={16}/>}</span><span><strong>{error ? '오프라인 저장 확인 필요' : info ? '오프라인 사용 준비됨' : '여행 전체 오프라인 저장'}</strong><small>{error || (info ? `앱 · 일정 · 일본어 · ${info.weather_saved ? '날씨' : '날씨 제외'} · 좌표 기반 오프라인 동선 지도 저장` : 'Wi-Fi에서 한 번 저장하면 일본에서 데이터 없이 핵심 화면을 열 수 있습니다.')}</small></span></div>
-    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button><button className="offline-reset" onClick={onReset} disabled={!online || saving} title="이 기기의 저장된 여행 데이터만 지우고 서버에서 다시 받기"><RefreshCw size={13}/>로컬 데이터 초기화</button></div>
+  const headline = error ? '오프라인 저장 확인 필요' : resetting ? '로컬 데이터 초기화 중' : resetMessage ? '최신 서버 데이터로 새로고침 완료' : info ? '오프라인 사용 준비됨' : '여행 전체 오프라인 저장';
+  const detail = error || resetMessage || (info ? `앱 · 일정 · 일본어 · ${info.weather_saved ? '날씨' : '날씨 제외'} · 좌표 기반 오프라인 동선 지도 저장` : 'Wi-Fi에서 한 번 저장하면 일본에서 데이터 없이 핵심 화면을 열 수 있습니다.');
+  return <div className={`offline-pack-bar ${info ? 'ready' : 'empty'} ${!online ? 'offline' : ''} ${error ? 'error' : ''} ${resetMessage ? 'reset-done' : ''}`}>
+    <div className="offline-pack-copy"><span className="offline-pack-icon">{error ? <AlertTriangle size={16}/> : resetting ? <RefreshCw size={16}/> : resetMessage || info ? <Check size={16}/> : <Download size={16}/>}</span><span><strong>{headline}</strong><small>{detail}</small></span></div>
+    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || resetting || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button><button className="offline-reset" onClick={onReset} disabled={!online || saving || resetting} title={online ? '이 기기의 저장된 여행 데이터만 지우고 서버에서 다시 받기 · 동기화 대기 변경은 유지' : '오프라인에서는 서버 최신 데이터를 받을 수 없어 초기화할 수 없습니다.'}><RefreshCw size={13}/>{resetting ? '초기화 중…' : '로컬 데이터 초기화'}</button></div>
   </div>;
 }
 
@@ -581,6 +600,7 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
         <button onClick={() => onOpenTab('schedule')}><CalendarDays size={15}/><span>전체 일정</span></button>
         <button onClick={() => onOpenTab('trip-weather')}><CloudRain size={15}/><span>날씨 · 코디</span></button>
         <button onClick={() => openPhraseCategory('all')}><MessageCircle size={15}/><span>일본어 표현</span></button>
+        <button onClick={() => onOpenTab('budget')}><Wallet size={15}/><span>지출 기록</span></button>
         {hotelMapUrl ? <a href={hotelMapUrl} target="_blank" rel="noreferrer"><BedDouble size={15}/><span>숙소로 이동</span></a> : <button onClick={() => onOpenTab('map')}><MapPin size={15}/><span>지도</span></button>}
       </div>
     </section>
@@ -618,12 +638,19 @@ function TripJourneyCard({ group, active, now, nextEventId, onSetStatus }: { gro
 }
 
 const tripShoppingItems = [
-  { id: 'kitkat-matcha', category: '과자 · 선물', name: 'KitKat 진한 말차 10매', price: '목표 ¥350–550', buy: '드럭스토어 · 대형 편의점 · 돈키 계열', note: '¥550 이하면 무난. 여름에는 초콜릿이 녹을 수 있어 여행 마지막 날 가까이 구매.', image: null, source: 'https://kitkat.nestle.jp/products/kitkat-matcha-green-tea' },
-  { id: 'jagarico', category: '편의점 간식', name: 'Calbee じゃがりこ', price: '목표 ¥150–220 / 컵', buy: 'FamilyMart · 편의점', note: '샐러드/치즈 계열 기본맛 우선. 부피가 커서 선물용 대량 구매보다는 현지 간식용.', image: 'https://www.calbee.co.jp/jagarico/assets/images/ogp.png', source: 'https://www.calbee.co.jp/jagarico/' },
-  { id: 'pocky', category: '과자 · 선물', name: 'Pocky · 일본 한정/계절맛', price: '목표 ¥180–300 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '기본맛보다 계절/지역 한정이 보이면 1–2개만. ¥300을 크게 넘으면 기념품점 프리미엄 가능성.', image: 'https://www.glico.com/assets/images/original/pocky_2026KV%EF%BC%88%E3%82%B9%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E6%A1%88%EF%BC%89%20%281%29.jpg', source: 'https://www.glico.com/jp/product/chocolate/pocky/' },
-  { id: 'alfort', category: '과자 · 선물', name: 'Bourbon Alfort Mini', price: '목표 ¥150–250 / 상자', buy: '편의점 · 드럭스토어 · 마트', note: '가격 대비 나눠주기 좋은 초콜릿 과자. 여러 맛을 조금씩 섞어 사기 좋음.', image: 'https://www.bourbon.co.jp/product_file/file/36079-01%E3%82%A2%E3%83%AB%E3%83%95%E3%82%A9%E3%83%BC%E3%83%88%28SSS%29_%E7%AB%8B%E4%BD%93%EF%BC%88%E3%83%81%E3%83%A7%E3%82%B3%E3%83%AC%E3%83%BC%E3%83%88%E8%89%B2%E5%A4%89%E6%9B%B4%EF%BC%89-s.jpg', source: 'https://www.bourbon.co.jp/' },
-  { id: 'melanocc', category: '드럭스토어', name: 'Melano CC 프리미엄 미용액 20mL', price: '기준가 ¥1,628', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '공식 온라인 정가가 ¥1,628. 면세/매장 할인 후 이보다 내려가면 좋은 편.', image: 'https://jp.rohto.com/-/media/com/melanocc/20250828/assets/img/ogp_top.png?sc_lang=ja-jp', source: 'https://www.shop.rohto.co.jp/category/skincare/melanocc/168583.html' },
-  { id: 'bioreuv', category: '드럭스토어', name: 'Biore UV Aqua Rich', price: '목표 ¥800–1,100', buy: 'Matsumoto Kiyoshi 등 드럭스토어', note: '일상용 선크림 후보. 대용량/기획세트는 단위 용량 가격을 비교.', image: 'https://www.kao.co.jp/content/dam/sites/kao/www-kao-co-jp/bioreuv/cmn/share_bioreuv.jpg', source: 'https://www.kao.co.jp/bioreuv/' },
+  { id: 'famima-kokunama-pudding', category: '편의점 · 바로 먹기', name: 'FamilyMart こく生プリン', price: '공식 ¥182', buy: 'FamilyMart 냉장 디저트', note: '생크림을 넣은 진한 커스터드 푸딩. 가격 부담이 적어서 첫 편의점 디저트로 가장 무난.', image: 'https://www.family.co.jp/content/dam/family/goods/1910049.jpg', source: 'https://www.family.co.jp/goods/dessert/1910049.html' },
+  { id: 'famima-torokeru-pudding', category: '편의점 · 바로 먹기', name: 'FamilyMart 窯出しとろけるプリン', price: '공식 ¥230', buy: 'FamilyMart 냉장 디저트', note: '우유·달걀 풍미가 강한 부드러운 타입. 푸딩은 여러 개 사 오기보다 그날 숙소에서 하나씩 먹기.', image: 'https://www.family.co.jp/content/dam/family/goods/1945133.jpg', source: 'https://www.family.co.jp/goods/dessert/1945133.html' },
+  { id: 'famima-souffle-pudding', category: '편의점 · 바로 먹기', name: 'FamilyMart スフレ・プリン', price: '공식 ¥360', buy: 'FamilyMart 냉장 디저트', note: '푸딩 위에 치즈 수플레가 올라간 디저트. 저녁 식사 직전보다는 숙소 복귀 후 둘이 나눠 먹기 좋음.', image: 'https://www.family.co.jp/content/dam/family/goods/1940145.jpg', source: 'https://www.family.co.jp/goods/dessert/1940145.html' },
+  { id: 'famima-custard-choux', category: '편의점 · 바로 먹기', name: 'FamilyMart 진한 커스터드 슈', price: '공식 ¥185', buy: 'FamilyMart 냉장 디저트', note: '바닐라 커스터드 슈. ¥200 안팎이라 푸딩과 비교해서 그날 하나만 골라도 충분.', image: 'https://www.family.co.jp/content/dam/family/goods/1943047.jpg', source: 'https://www.family.co.jp/goods/dessert/1943047.html' },
+  { id: 'famima-matcha-crepe', category: '편의점 · 바로 먹기', name: 'ファミマ・ザ・クレープ 宇治抹茶', price: '공식 ¥270', buy: 'FamilyMart 냉장 디저트', note: '우지 말차 크레페. 교토에서 말차 디저트를 못 먹었을 때 오사카에서 가볍게 보충하는 후보.', image: 'https://www.family.co.jp/content/dam/family/goods/1944136.jpg', source: 'https://www.family.co.jp/goods/dessert/1944136.html' },
+  { id: 'famima-kansai-egg-ham', category: '편의점 · 바로 먹기', name: '関西限定 たまご焼きとハムのサンド', price: '공식 ¥348', buy: 'FamilyMart 샌드위치 냉장고', note: '오사카에서 먹기 좋은 간사이 한정 계란말이+햄 산도. 해산물 없이 간단한 아침/야식으로 쓰기 좋음.', image: 'https://www.family.co.jp/content/dam/family/goods/0916257.jpg', source: 'https://www.family.co.jp/goods/sandwich/0916257.html' },
+  { id: 'famima-mix-sand', category: '편의점 · 바로 먹기', name: 'FamilyMart 3種のミックスサンド', price: '공식 ¥322', buy: 'FamilyMart 샌드위치 냉장고', note: '참치·햄치즈·계란 3종. Domenic은 생선 참치가 가능하므로 무난하지만 제품 라벨 성분은 현장에서 한 번 확인.', image: 'https://www.family.co.jp/content/dam/family/goods/0910095.jpg', source: 'https://www.family.co.jp/goods/sandwich/0910095.html' },
+  { id: 'kitkat-matcha', category: '드럭스토어 · 과자/선물', name: 'KitKat 일본 한정 · 말차/시즌 맛', price: '목표 ¥250–500 / 봉지', buy: 'Matsumoto Kiyoshi · 드럭스토어 · 마트', note: '편의점은 소포장·신상품 확인용, 여러 개 살 거면 드럭스토어/마트를 먼저 본다. ¥500을 많이 넘으면 다른 매장과 비교.', image: null, source: 'https://kitkat.nestle.jp/' },
+  { id: 'pocky', category: '드럭스토어 · 과자/선물', name: 'Pocky · 일본 한정/계절맛', price: '목표 ¥130–220 / 상자', buy: 'Matsumoto Kiyoshi · 드럭스토어 · 마트', note: '편의점에서 바로 집기보다 드럭스토어에서 기본맛/계절맛 가격을 같이 비교. 선물용은 2–3맛만.', image: 'https://www.glico.com/assets/images/original/pocky_2026KV%EF%BC%88%E3%82%B9%E3%83%86%E3%82%A3%E3%83%83%E3%82%AF%E6%A1%88%EF%BC%89%20%281%29.jpg', source: 'https://www.glico.com/jp/product/chocolate/pocky/' },
+  { id: 'alfort', category: '드럭스토어 · 과자/선물', name: 'Bourbon Alfort Mini', price: '목표 ¥120–220 / 상자', buy: 'Matsumoto Kiyoshi · 드럭스토어 · 마트', note: '저렴하고 나눠주기 쉬운 초콜릿 과자. 드럭스토어 세일이면 여러 맛을 묶어 사기 좋음.', image: 'https://www.bourbon.co.jp/product_file/file/36079-01%E3%82%A2%E3%83%AB%E3%83%95%E3%82%A9%E3%83%BC%E3%83%88%28SSS%29_%E7%AB%8B%E4%BD%93%EF%BC%88%E3%83%81%E3%83%A7%E3%82%B3%E3%83%AC%E3%83%BC%E3%83%88%E8%89%B2%E5%A4%89%E6%9B%B4%EF%BC%89-s.jpg', source: 'https://www.bourbon.co.jp/' },
+  { id: 'jagarico', category: '드럭스토어 · 과자/선물', name: 'Calbee じゃがりこ', price: '목표 ¥130–200 / 컵', buy: 'Matsumoto Kiyoshi · 드럭스토어 · 마트', note: '현지에서 바로 먹어도 좋지만 여러 개 살 땐 편의점보다 드럭스토어 가격을 먼저 확인. 컵 부피 때문에 대량 선물은 비추천.', image: 'https://www.calbee.co.jp/jagarico/assets/images/ogp.png', source: 'https://www.calbee.co.jp/jagarico/' },
+  { id: 'black-thunder', category: '드럭스토어 · 과자/선물', name: 'Black Thunder · 미니바/패밀리팩', price: '목표 ¥250–450 / 패밀리팩', buy: '드럭스토어 · 마트', note: '개별 포장이라 회사/지인용으로 나누기 편함. 지역 한정판보다 기본 미니바 패밀리팩이 가성비 우선.', image: 'https://www.yurakuseika.co.jp/wp/wp-content/uploads/2025/09/ogp.jpg', source: 'https://www.yurakuseika.co.jp/blackthunder/' },
+  { id: 'hi-chew', category: '드럭스토어 · 과자/선물', name: 'Hi-Chew · 과일/어소트 봉지', price: '목표 ¥180–350 / 봉지', buy: '드럭스토어 · 마트', note: '초콜릿처럼 녹을 걱정이 적어서 귀국용 과자로 편함. 여러 봉지 살 때는 할인 진열대를 먼저 확인.', image: 'https://www.morinaga.co.jp/hi-chew/img/ogp.jpg', source: 'https://www.morinaga.co.jp/hi-chew/' },
 ];
 
 function ShoppingItemPhoto({ item }: { item: typeof tripShoppingItems[number] }) {
@@ -634,9 +661,17 @@ function ShoppingItemPhoto({ item }: { item: typeof tripShoppingItems[number] })
 
 function TripShoppingGuidePanel({ trip }: { trip: Trip }) {
   const [bought, setBought] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('mytrip-shopping-bought') || '[]')); } catch { return new Set(); }
+    try {
+      const validIds = new Set(tripShoppingItems.map((item) => item.id));
+      const stored = JSON.parse(localStorage.getItem('mytrip-shopping-bought') || '[]') as string[];
+      return new Set(stored.filter((id) => validIds.has(id)));
+    } catch { return new Set(); }
   });
   const shoppingEvents = trip.events.filter((event) => ['2026-09-15', '2026-09-16'].includes(event.date) && /Animate|Surugaya|Den Den|FamilyMart|Matsumoto|쇼핑|간식/i.test(`${event.title} ${event.location || ''}`)).sort((a, b) => `${a.date} ${a.start_time || ''}`.localeCompare(`${b.date} ${b.start_time || ''}`));
+  const shoppingGroups = useMemo(() => tripShoppingItems.reduce<Record<string, typeof tripShoppingItems>>((groups, item) => {
+    (groups[item.category] ||= []).push(item);
+    return groups;
+  }, {}), []);
   function toggleBought(id: string) {
     setBought((current) => {
       const next = new Set(current);
@@ -646,9 +681,147 @@ function TripShoppingGuidePanel({ trip }: { trip: Trip }) {
     });
   }
   return <div className="shopping-guide-page">
-    <section className="trip-tool-intro shopping-guide-hero"><div><p className="eyebrow">OSAKA SHOPPING RUN</p><h2>오사카에서 몰아서 사고, 교토에서는 가볍게.</h2><p>덴덴타운 애니 굿즈 → 편의점 간식 → 마지막 밤 드럭스토어 순으로 묶었습니다. 가격은 여행 중 판단용 목표 범위입니다.</p></div><div className="shopping-progress"><strong>{bought.size}/{tripShoppingItems.length}</strong><span>구매 체크</span></div></section>
+    <section className="trip-tool-intro shopping-guide-hero"><div><p className="eyebrow">OSAKA FOOD SHOPPING</p><h2>편의점은 바로 먹고, 드럭스토어에서는 싸게 챙겨오기.</h2><p>애니 굿즈는 일정만 유지하고 추천 리스트에서는 제외했습니다. FamilyMart에서는 푸딩·산도 같은 냉장 간식을 그날 먹고, KitKat·Pocky 같은 상온 과자는 마지막 밤 드럭스토어에서 가격을 비교해 사는 흐름입니다.</p></div><div className="shopping-progress"><strong>{bought.size}/{tripShoppingItems.length}</strong><span>구매 체크</span></div></section>
     <section className="shopping-route-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">IN THE ITINERARY</p><h3>실제 일정에 넣은 쇼핑</h3></span></div><b>9/15–16 · Osaka</b></div><div className="shopping-route-list">{shoppingEvents.map((event) => <article key={event.id}><span>{formatMonthDay(event.date)} · {event.start_time || '--:--'}</span><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}{googleMapsEventUrl(event) && <a href={googleMapsEventUrl(event)!} target="_blank" rel="noreferrer"><MapPin size={12}/>지도</a>}</article>)}</div></section>
-    <section className="shopping-list-section"><div className="trip-section-heading"><div><ShoppingBag/><span><p className="eyebrow">BUY LIST</p><h3>사올 만한 것 · 적정 가격대</h3></span></div><b>{tripShoppingItems.length}개 추천</b></div><div className="shopping-item-grid">{tripShoppingItems.map((item) => <article key={item.id} className={bought.has(item.id) ? 'bought' : ''}><ShoppingItemPhoto item={item}/><div className="shopping-item-copy"><span>{item.category}</span><h4>{item.name}</h4><strong>{item.price}</strong><p>{item.buy}</p><small>{item.note}</small><footer><button onClick={() => toggleBought(item.id)}><Check size={13}/>{bought.has(item.id) ? '구매 완료' : '살 것'}</button><a href={item.source} target="_blank" rel="noreferrer"><ExternalLink size={12}/>제품 보기</a></footer></div></article>)}</div><p className="shopping-price-note">가격은 매장·세일·면세 여부에 따라 달라질 수 있습니다. 특히 과자는 “이 범위 이하이면 그냥 산다”는 현장 판단용 가이드로 보세요.</p></section>
+    <section className="shopping-list-section"><div className="trip-section-heading"><div><ShoppingBag/><span><p className="eyebrow">FOOD BUY LIST</p><h3>현지에서 먹기 · 싸게 사오기</h3></span></div><b>{tripShoppingItems.length}개 추천</b></div><div className="shopping-category-list">{Object.entries(shoppingGroups).map(([category, items]) => <section className="shopping-category-group" key={category}><header><h4>{category}</h4><span>{items.length}개</span></header><div className="shopping-item-grid">{items.map((item) => <article key={item.id} className={bought.has(item.id) ? 'bought' : ''}><ShoppingItemPhoto item={item}/><div className="shopping-item-copy"><span>{item.category}</span><h4>{item.name}</h4><strong>{item.price}</strong><p>{item.buy}</p><small>{item.note}</small><footer><button onClick={() => toggleBought(item.id)}><Check size={13}/>{bought.has(item.id) ? '구매 완료' : '먹음 · 구매함'}</button><a href={item.source} target="_blank" rel="noreferrer"><ExternalLink size={12}/>제품 보기</a></footer></div></article>)}</div></section>)}</div><p className="shopping-price-note">편의점 가격은 FamilyMart 공식 현재가를 우선 적었습니다. 드럭스토어 과자는 매장별 세일 폭이 커서 목표 범위로 보고, 같은 상온 과자라면 편의점보다 Matsumoto Kiyoshi 같은 드럭스토어/마트 가격을 먼저 비교하세요.</p></section>
+  </div>;
+}
+
+const budgetPaymentMethods = ['Travel Wallet', '신용카드', 'Toss', 'KakaoPay', '현금', '기타'];
+const budgetExpenseCategories = ['식비', '교통', '쇼핑', '관광', '편의점 · 간식', '숙소', '기타'];
+
+function yen(value: number) {
+  return `¥${Math.round(value || 0).toLocaleString('en-US')}`;
+}
+
+function budgetTravelerName(name: string) {
+  if (name === 'Oosu') return '우수 · Oosu';
+  if (name === 'Domenic') return '도미닉 · Domenic';
+  return name;
+}
+
+function BudgetLedgerPanel({ trip, reload }: { trip: Trip; reload: () => void }) {
+  const today = todayInTimeZone('Asia/Tokyo');
+  const defaultDate = today >= trip.start_date && today <= trip.end_date ? today : trip.start_date;
+  const formRef = useRef<HTMLElement | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    entry_type: 'EXPENSE' as 'BUDGET' | 'EXPENSE',
+    participant_id: trip.participants[0]?.id || '',
+    amount_jpy: '',
+    payment_method: 'Travel Wallet',
+    category: '식비',
+    merchant: '',
+    occurred_on: defaultDate,
+    notes: '',
+  });
+  const entries = trip.budget_entries || [];
+  const totalBudget = entries.filter((entry) => entry.entry_type === 'BUDGET').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+  const totalSpent = entries.filter((entry) => entry.entry_type === 'EXPENSE').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+  const totalRemaining = totalBudget - totalSpent;
+
+  function openEntry(participantId: string, type: 'BUDGET' | 'EXPENSE') {
+    setForm((current) => ({
+      ...current,
+      participant_id: participantId,
+      entry_type: type,
+      payment_method: type === 'BUDGET' ? 'Travel Wallet' : current.payment_method,
+      category: type === 'BUDGET' ? '환전 · 충전' : (budgetExpenseCategories.includes(current.category) ? current.category : '식비'),
+      merchant: type === 'BUDGET' ? 'Travel Wallet 추가 환전' : '',
+      amount_jpy: '',
+      notes: '',
+    }));
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  async function addEntry() {
+    const amount = Number(form.amount_jpy);
+    if (!form.participant_id || !Number.isFinite(amount) || amount <= 0 || saving) return;
+    setSaving(true);
+    try {
+      await post(`/api/trips/${trip.id}/budget/entries`, {
+        id: globalThis.crypto?.randomUUID?.() || `budget-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        participant_id: form.participant_id,
+        entry_type: form.entry_type,
+        amount_jpy: Math.round(amount),
+        payment_method: form.payment_method,
+        category: form.entry_type === 'BUDGET' ? '환전 · 충전' : form.category,
+        merchant: form.merchant.trim() || (form.entry_type === 'BUDGET' ? `${form.payment_method} 예산 추가` : null),
+        occurred_on: form.occurred_on,
+        notes: form.notes.trim() || null,
+      });
+      setForm((current) => ({ ...current, amount_jpy: '', merchant: current.entry_type === 'BUDGET' ? 'Travel Wallet 추가 환전' : '', notes: '' }));
+      await reload();
+    } finally { setSaving(false); }
+  }
+
+  async function removeEntry(entryId: string) {
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry) return;
+    if (!window.confirm(`${entry.entry_type === 'BUDGET' ? '예산' : '지출'} ${yen(entry.amount_jpy)} 기록을 삭제할까요?`)) return;
+    await del(`/api/budget/entries/${entryId}`);
+    await reload();
+  }
+
+  return <div className="budget-ledger-page">
+    <section className="budget-hero">
+      <div><p className="eyebrow">TRIP MONEY</p><h2>각자 얼마 쓰고 있는지 바로 보기.</h2><p>Travel Wallet 환전액을 예산으로 잡고, 여행 중에는 실제 결제한 사람과 결제수단을 기록합니다. 추가 환전은 예산 추가로 남겨 총액 변화도 추적합니다.</p></div>
+      <div className="budget-overview">
+        <span><small>총 예산</small><strong>{yen(totalBudget)}</strong></span>
+        <span><small>총 지출</small><strong>{yen(totalSpent)}</strong></span>
+        <span className={totalRemaining < 0 ? 'negative' : ''}><small>남은 예산</small><strong>{yen(totalRemaining)}</strong></span>
+      </div>
+    </section>
+
+    <section className="budget-person-grid">
+      {trip.participants.map((person) => {
+        const mine = entries.filter((entry) => entry.participant_id === person.id);
+        const budget = mine.filter((entry) => entry.entry_type === 'BUDGET').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+        const spent = mine.filter((entry) => entry.entry_type === 'EXPENSE').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+        const remaining = budget - spent;
+        const ratio = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : (spent > 0 ? 100 : 0);
+        const methods = mine.filter((entry) => entry.entry_type === 'EXPENSE').reduce<Record<string, number>>((acc, entry) => {
+          acc[entry.payment_method] = (acc[entry.payment_method] || 0) + Number(entry.amount_jpy || 0);
+          return acc;
+        }, {});
+        const walletBudget = mine.filter((entry) => entry.entry_type === 'BUDGET' && entry.payment_method === 'Travel Wallet').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+        return <article className={`budget-person-card ${remaining < 0 ? 'over' : ''}`} key={person.id}>
+          <header><div><span className="budget-avatar">{person.name.slice(0, 1).toUpperCase()}</span><span><small>PERSONAL BUDGET</small><strong>{budgetTravelerName(person.name)}</strong></span></div><b>{yen(remaining)}</b></header>
+          <div className="budget-person-numbers"><span><small>예산</small><strong>{yen(budget)}</strong></span><span><small>지출</small><strong>{yen(spent)}</strong></span><span><small>Travel Wallet 환전</small><strong>{yen(walletBudget)}</strong></span></div>
+          <div className="budget-meter"><i style={{ width: `${ratio}%` }} /></div>
+          <div className="budget-methods">{Object.entries(methods).length ? Object.entries(methods).map(([method, amount]) => <span key={method}>{method}<b>{yen(amount)}</b></span>) : <span>아직 지출 없음</span>}</div>
+          <footer><button onClick={() => openEntry(person.id, 'EXPENSE')}><Receipt size={14}/>지출 기록</button><button onClick={() => openEntry(person.id, 'BUDGET')}><Plus size={14}/>예산 추가</button></footer>
+        </article>;
+      })}
+    </section>
+
+    <section className="budget-entry-form" ref={formRef}>
+      <div className="trip-section-heading"><div><CreditCard/><span><p className="eyebrow">ADD TO LEDGER</p><h3>{form.entry_type === 'EXPENSE' ? '지출 기록' : '예산 · 환전 추가'}</h3></span></div><div className="budget-type-toggle"><button className={form.entry_type === 'EXPENSE' ? 'active' : ''} onClick={() => setForm((current) => ({ ...current, entry_type: 'EXPENSE', category: '식비', merchant: '' }))}>지출</button><button className={form.entry_type === 'BUDGET' ? 'active' : ''} onClick={() => setForm((current) => ({ ...current, entry_type: 'BUDGET', payment_method: 'Travel Wallet', category: '환전 · 충전', merchant: 'Travel Wallet 추가 환전' }))}>예산 추가</button></div></div>
+      <div className="budget-form-grid">
+        <label>누가<select value={form.participant_id} onChange={(event) => setForm({ ...form, participant_id: event.target.value })}>{trip.participants.map((person) => <option value={person.id} key={person.id}>{budgetTravelerName(person.name)}</option>)}</select></label>
+        <label>금액 · JPY<input inputMode="numeric" type="number" min="1" step="1" value={form.amount_jpy} onChange={(event) => setForm({ ...form, amount_jpy: event.target.value })} placeholder="1200" /></label>
+        <label>결제수단<select value={form.payment_method} onChange={(event) => setForm({ ...form, payment_method: event.target.value })}>{budgetPaymentMethods.map((method) => <option key={method}>{method}</option>)}</select></label>
+        <label>날짜<input type="date" min={trip.start_date} max={trip.end_date} value={form.occurred_on} onChange={(event) => setForm({ ...form, occurred_on: event.target.value })} /></label>
+        {form.entry_type === 'EXPENSE' && <label>분류<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{budgetExpenseCategories.map((category) => <option key={category}>{category}</option>)}</select></label>}
+        <label className="budget-merchant">{form.entry_type === 'BUDGET' ? '예산 메모' : '어디서 썼는지'}<input value={form.merchant} onChange={(event) => setForm({ ...form, merchant: event.target.value })} placeholder={form.entry_type === 'BUDGET' ? 'Travel Wallet 추가 환전' : 'Kura Sushi / 지하철 / 편의점'} /></label>
+        <label className="budget-note">메모<input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="둘이 먹은 저녁 / 면세 쇼핑 등" /></label>
+        <button className="budget-save" onClick={addEntry} disabled={saving || !form.participant_id || Number(form.amount_jpy) <= 0}>{saving ? '저장 중…' : form.entry_type === 'EXPENSE' ? '지출 저장' : '예산 추가 저장'}</button>
+      </div>
+    </section>
+
+    <section className="budget-ledger-list">
+      <div className="trip-section-heading"><div><Receipt/><span><p className="eyebrow">LEDGER</p><h3>전체 가계부</h3></span></div><b>{entries.length}건</b></div>
+      {entries.length ? <div>{entries.map((entry) => {
+        const person = trip.participants.find((item) => item.id === entry.participant_id);
+        const budget = entry.entry_type === 'BUDGET';
+        return <article className={budget ? 'budget-row funding' : 'budget-row expense'} key={entry.id}>
+          <span className="budget-row-icon">{budget ? <Wallet size={15}/> : <Receipt size={15}/>}</span>
+          <div className="budget-row-copy"><span>{entry.occurred_on} · {person ? budgetTravelerName(person.name) : '여행자'} · {entry.payment_method}</span><strong>{entry.merchant || entry.category || (budget ? '예산 추가' : '지출')}</strong>{entry.notes && <small>{entry.notes}</small>}</div>
+          <div className="budget-row-amount"><strong>{budget ? '+' : '-'}{yen(entry.amount_jpy)}</strong><small>{entry.category || (budget ? '환전 · 충전' : '기타')}</small></div>
+          <button className="ghost-icon" onClick={() => removeEntry(entry.id)} aria-label="기록 삭제"><Trash2 size={14}/></button>
+        </article>;
+      })}</div> : <div className="budget-empty">아직 기록이 없습니다.</div>}
+    </section>
   </div>;
 }
 

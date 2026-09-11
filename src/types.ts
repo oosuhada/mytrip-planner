@@ -92,6 +92,22 @@ export type TripChecklistItem = {
   packing_ids?: string[];
 };
 
+export type BudgetEntry = {
+  id: string;
+  trip_id: string;
+  participant_id: string;
+  entry_type: 'BUDGET' | 'EXPENSE' | string;
+  amount_jpy: number;
+  payment_method: string;
+  category?: string | null;
+  merchant?: string | null;
+  occurred_on: string;
+  notes?: string | null;
+  source?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export type Restaurant = {
   id: string;
   name: string;
@@ -197,6 +213,7 @@ export type Trip = TripSummary & {
   packing: PackingItem[];
   packing_bags: PackingBag[];
   checklist: TripChecklistItem[];
+  budget_entries: BudgetEntry[];
   restaurants: Restaurant[];
   guides: TripGuide[];
   options: TripOption[];
