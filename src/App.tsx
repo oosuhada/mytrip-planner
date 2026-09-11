@@ -92,6 +92,7 @@ function HomePage() {
 
 type WorkspaceMode = 'plan' | 'trip';
 type Tab = 'today' | 'trip-weather' | 'phrases' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type TripPhraseCategoryId = 'all' | 'restaurant' | 'diet' | 'transport' | 'hotel' | 'shopping' | 'help';
 
 function TripPage({ tripId }: { tripId: string }) {
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -188,7 +189,7 @@ function TripPage({ tripId }: { tripId: string }) {
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} tripMode={workspaceMode === 'trip'} />}
-          {tab === 'map' && <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />}
+          {tab === 'map' && (workspaceMode === 'trip' ? <TripFieldMapPanel trip={trip} /> : <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />)}
           {workspaceMode === 'plan' && tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
           {workspaceMode === 'plan' && tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={load} />}
           {workspaceMode === 'plan' && tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={load} />}
@@ -370,6 +371,16 @@ function TripLivePanel({ trip, weather, reload, onOpenTab }: { trip: Trip; weath
     : dayWeather && dayWeather.max >= 30
       ? '더운 날씨 · 물 자주 마시고 실내 휴식 구간 유지'
       : '일정 사이 휴식을 남겨두고 무리하지 않기';
+  const [supportView, setSupportView] = useState<'meals'|'planb'>('meals');
+  const visibleSupportView = supportView === 'meals' && reservationRows.length
+    ? 'meals'
+    : decisions.length
+      ? 'planb'
+      : 'meals';
+  function openPhraseCategory(category: TripPhraseCategoryId) {
+    localStorage.setItem('mytrip-phrase-category', category);
+    onOpenTab('phrases');
+  }
   async function selectPlanB(slotId: string, optionId: string) {
     await patch(`/api/decision-slots/${slotId}/select`, { option_id: optionId });
     reload();
@@ -409,40 +420,46 @@ function TripLivePanel({ trip, weather, reload, onOpenTab }: { trip: Trip; weath
           <h4>{nextEvent?.title || '오늘 일정 종료'}</h4>
           {nextEvent?.location && <p>{nextEvent.location}</p>}
           {(nextTransport || nextWalking) && <small>{[nextTransport, nextWalking].filter(Boolean).join(' · ')}</small>}
-          <footer>{nextMapUrl && <a href={nextMapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>지도 열기</a>}{nextEvent?.address && <button onClick={() => navigator.clipboard?.writeText(nextEvent.address || '')}><Copy size={13}/>주소 복사</button>}</footer>
+          <footer>{nextMapUrl && <a href={nextMapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>지도 열기</a>}<button onClick={() => openPhraseCategory('transport')}><MessageCircle size={13}/>교통 일본어</button>{nextEvent?.address && <button onClick={() => navigator.clipboard?.writeText(nextEvent.address || '')}><Copy size={13}/>주소 복사</button>}</footer>
         </article>
         <article className="trip-command-card">
           <header><span><Utensils size={16}/>다음 식사</span>{nextMealSlot?.time && <b>{nextMealSlot.time}</b>}</header>
           <h4>{nextMeal?.name || nextMealSlot?.label || '식사 후보 확인'}</h4>
           <p>{nextMeal ? [nextMeal.price_range, nextMeal.hours].filter(Boolean).join(' · ') : '선택된 식당이 없어요.'}</p>
           {nextMeal?.dietary_notes && <small>{nextMeal.dietary_notes}</small>}
-          <footer>{nextMeal?.google_maps_url && <a href={nextMeal.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={14}/>식당 지도</a>}{nextMeal?.menu_url && <a href={nextMeal.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}</footer>
+          <footer>{nextMeal?.google_maps_url && <a href={nextMeal.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={14}/>식당 지도</a>}<button onClick={() => openPhraseCategory('restaurant')}><MessageCircle size={13}/>식당 일본어</button>{nextMeal?.menu_url && <a href={nextMeal.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}</footer>
         </article>
         <article className="trip-command-card">
           <header><span><BedDouble size={16}/>오늘 숙소</span></header>
           <h4>{currentHotel?.location || currentHotel?.title || '숙소 확인'}</h4>
           {currentHotel?.address && <p>{currentHotel.address}</p>}
           <small>피곤하거나 비가 세면 숙소 복귀를 우선</small>
-          <footer>{hotelMapUrl && <a href={hotelMapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>숙소 지도</a>}{currentHotel?.address && <button onClick={() => navigator.clipboard?.writeText(currentHotel.address || '')}><Copy size={13}/>주소 복사</button>}</footer>
+          <footer>{hotelMapUrl && <a href={hotelMapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>숙소 지도</a>}<button onClick={() => openPhraseCategory('hotel')}><MessageCircle size={13}/>호텔 일본어</button>{currentHotel?.address && <button onClick={() => navigator.clipboard?.writeText(currentHotel.address || '')}><Copy size={13}/>주소 복사</button>}</footer>
         </article>
       </div>
       <div className="trip-quick-actions" aria-label="TRIP 빠른 메뉴">
         <button onClick={() => onOpenTab('schedule')}><CalendarDays size={15}/><span>전체 일정</span></button>
         <button onClick={() => onOpenTab('trip-weather')}><CloudRain size={15}/><span>날씨 · 코디</span></button>
-        <button onClick={() => onOpenTab('phrases')}><MessageCircle size={15}/><span>일본어 표현</span></button>
+        <button onClick={() => openPhraseCategory('all')}><MessageCircle size={15}/><span>일본어 표현</span></button>
         {hotelMapUrl ? <a href={hotelMapUrl} target="_blank" rel="noreferrer"><BedDouble size={15}/><span>숙소로 이동</span></a> : <button onClick={() => onOpenTab('map')}><MapPin size={15}/><span>지도</span></button>}
       </div>
     </section>
 
-    {reservationRows.length > 0 && <section className="trip-live-section"><div className="trip-section-heading"><div><Utensils/><span><p className="eyebrow">TODAY'S MEALS</p><h3>오늘 식사 · 예약</h3></span></div></div><div className="trip-meal-live-grid">{reservationRows.map(({ slot, restaurant }) => restaurant && <article key={slot.id}><RestaurantPhoto url={restaurant.image_url} kind="meal"/><div><span>{slot.time || ''} · {slot.label}</span><h4>{restaurant.name}</h4><p>{restaurant.hours || '영업시간 확인'} · {restaurant.price_range || '예산 확인'}</p><div>{restaurant.google_maps_url && <a href={restaurant.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={13}/>지도</a>}{restaurant.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}<b className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'walkin'}`}>{restaurant.reservation_status}</b></div></div></article>)}</div></section>}
-
-    {decisions.length > 0 && <section className="trip-live-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">PLAN B</p><h3>상황 바뀌면 바로 전환</h3></span></div></div><div className="trip-planb-list">{decisions.map((slot) => { const selected = slot.options.find((option) => option.id === slot.selected_option_id); const alternatives = slot.options.filter((option) => option.id !== slot.selected_option_id); if (!selected || !alternatives.length) return null; return <article key={slot.id}><header><span>{slot.time || ''} · {slot.title}</span><strong>{selected.label}</strong></header><div className="trip-planb-options">{alternatives.map((option) => <div key={option.id}><span><b>PLAN B</b>{option.label}<small>{[option.duration, option.price].filter(Boolean).join(' · ')}</small></span><button onClick={() => selectPlanB(slot.id, option.id)}>이걸로 변경</button></div>)}</div></article>; })}</div></section>}
+    {(reservationRows.length > 0 || decisions.length > 0) && <section className="trip-support-hub">
+      <div className="trip-section-heading"><div><MoreHorizontal/><span><p className="eyebrow">TODAY'S SUPPORT</p><h3>오늘 참고</h3></span></div><b>필요한 정보만 하나씩 보기</b></div>
+      <div className="trip-support-tabs" role="tablist" aria-label="오늘 참고 정보">
+        {reservationRows.length > 0 && <button className={visibleSupportView === 'meals' ? 'active' : ''} onClick={() => setSupportView('meals')}><Utensils size={14}/>식사 · 예약 <span>{reservationRows.length}</span></button>}
+        {decisions.length > 0 && <button className={visibleSupportView === 'planb' ? 'active' : ''} onClick={() => setSupportView('planb')}><Route size={14}/>Plan B <span>{decisions.length}</span></button>}
+      </div>
+      {visibleSupportView === 'meals' && reservationRows.length > 0 && <div className="trip-support-content"><div className="trip-meal-live-grid">{reservationRows.map(({ slot, restaurant }) => restaurant && <article key={slot.id}><RestaurantPhoto url={restaurant.image_url} kind="meal"/><div><span>{slot.time || ''} · {slot.label}</span><h4>{restaurant.name}</h4><p>{restaurant.hours || '영업시간 확인'} · {restaurant.price_range || '예산 확인'}</p><div>{restaurant.google_maps_url && <a href={restaurant.google_maps_url} target="_blank" rel="noreferrer"><MapPin size={13}/>지도</a>}<button onClick={() => openPhraseCategory('restaurant')}><MessageCircle size={12}/>식당 일본어</button>{restaurant.menu_url && <a href={restaurant.menu_url} target="_blank" rel="noreferrer"><Utensils size={13}/>메뉴</a>}<b className={`status-pill ${restaurant.reservation_status === 'BOOKED' ? 'booked' : 'walkin'}`}>{restaurant.reservation_status}</b></div></div></article>)}</div></div>}
+      {visibleSupportView === 'planb' && decisions.length > 0 && <div className="trip-support-content"><div className="trip-planb-list">{decisions.map((slot) => { const selected = slot.options.find((option) => option.id === slot.selected_option_id); const alternatives = slot.options.filter((option) => option.id !== slot.selected_option_id); if (!selected || !alternatives.length) return null; return <article key={slot.id}><header><span>{slot.time || ''} · {slot.title}</span><strong>{selected.label}</strong></header><div className="trip-planb-options">{alternatives.map((option) => <div key={option.id}><span><b>PLAN B</b>{option.label}<small>{[option.duration, option.price].filter(Boolean).join(' · ')}</small></span><button onClick={() => selectPlanB(slot.id, option.id)}>이걸로 변경</button></div>)}</div></article>; })}</div></div>}
+    </section>}
 
   </div>;
 }
 
 const tripPhraseGroups = [
-  { title: '식당', icon: <Utensils/>, items: [
+  { id: 'restaurant' as const, title: '식당', description: '입장 · 예약 · 주문 · 포장 · 계산', icon: <Utensils/>, items: [
     ['すみません、二人です。', '스미마센, 후타리 데스.', '실례합니다, 두 명이에요.'],
     ['予約しています。', '요야쿠 시테이마스.', '예약했습니다.'],
     ['おすすめは何ですか？', '오스스메와 난데스카?', '추천 메뉴가 뭐예요?'],
@@ -450,7 +467,7 @@ const tripPhraseGroups = [
     ['持ち帰りできますか？', '모치카에리 데키마스카?', '포장할 수 있나요?'],
     ['別々に払えますか？', '베츠베츠니 하라에마스카?', '따로 계산할 수 있나요?'],
   ] },
-  { title: '음식 제한', icon: <Utensils/>, items: [
+  { id: 'diet' as const, title: '음식 제한', description: '우니 · 비생선 해산물 · 내장 · 매운맛 확인', icon: <Utensils/>, items: [
     ['魚の寿司は食べられます。', '사카나노 스시와 타베라레마스.', '생선 초밥은 먹을 수 있어요.'],
     ['ウニは食べられません。', '우니와 타베라레마센.', '우니는 먹을 수 없어요.'],
     ['魚以外の海鮮は食べられません。', '사카나 이가이노 카이센와 타베라레마센.', '생선 이외의 해산물은 먹을 수 없어요.'],
@@ -459,7 +476,7 @@ const tripPhraseGroups = [
     ['これは辛いですか？', '코레와 카라이 데스카?', '이거 매운가요?'],
     ['辛くしないでください。', '카라쿠 시나이데 쿠다사이.', '맵지 않게 해주세요.'],
   ] },
-  { title: '교통', icon: <Navigation/>, items: [
+  { id: 'transport' as const, title: '교통', description: '전철 · 버스 · 승강장 · 환승 · ICOCA', icon: <Navigation/>, items: [
     ['この電車は京都駅に行きますか？', '코노 덴샤와 교토에키니 이키마스카?', '이 전철은 교토역에 가나요?'],
     ['河原町五条で降りたいです。', '카와라마치 고조데 오리타이 데스.', '가와라마치고조에서 내리고 싶어요.'],
     ['ICOCAは使えますか？', '이코카와 츠카에마스카?', 'ICOCA를 사용할 수 있나요?'],
@@ -468,7 +485,7 @@ const tripPhraseGroups = [
     ['乗り換えはどこですか？', '노리카에와 도코데스카?', '환승은 어디에서 하나요?'],
     ['このバスは河原町五条に行きますか？', '코노 바스와 카와라마치 고조니 이키마스카?', '이 버스는 가와라마치고조에 가나요?'],
   ] },
-  { title: '호텔', icon: <Hotel/>, items: [
+  { id: 'hotel' as const, title: '호텔', description: '짐 보관 · 체크인 · 대욕장 · Wi-Fi', icon: <Hotel/>, items: [
     ['荷物を預けてもいいですか？', '니모츠오 아즈케테모 이이데스카?', '짐을 맡겨도 될까요?'],
     ['チェックインをお願いします。', '첵쿠인오 오네가이시마스.', '체크인 부탁드립니다.'],
     ['大浴場はどこですか？', '다이요쿠조와 도코데스카?', '대욕장은 어디인가요?'],
@@ -476,14 +493,14 @@ const tripPhraseGroups = [
     ['チェックアウト後も荷物を預けられますか？', '첵쿠아우토 고모 니모츠오 아즈케라레마스카?', '체크아웃 후에도 짐을 맡길 수 있나요?'],
     ['Wi-Fiのパスワードは何ですか？', '와이파이노 파스와-도와 난데스카?', 'Wi-Fi 비밀번호가 뭐예요?'],
   ] },
-  { title: '쇼핑 · 결제', icon: <ShoppingBag/>, items: [
+  { id: 'shopping' as const, title: '쇼핑 · 결제', description: '카드 · IC 결제 · 수량 · 봉투 · 면세', icon: <ShoppingBag/>, items: [
     ['クレジットカードは使えますか？', '쿠레짓토 카-도와 츠카에마스카?', '신용카드 사용할 수 있나요?'],
     ['交通系ICカードは使えますか？', '코-츠-케이 아이시 카-도와 츠카에마스카?', '교통계 IC카드로 결제할 수 있나요?'],
     ['これを二つください。', '코레오 후타츠 쿠다사이.', '이거 두 개 주세요.'],
     ['袋を一枚ください。', '후쿠로오 이치마이 쿠다사이.', '봉투 한 장 주세요.'],
     ['免税できますか？', '멘제이 데키마스카?', '면세 가능한가요?'],
   ] },
-  { title: '도움 · 길찾기', icon: <MessageCircle/>, items: [
+  { id: 'help' as const, title: '도움 · 길찾기', description: '다시 말하기 · 화장실 · 약국 · 몸 상태', icon: <MessageCircle/>, items: [
     ['もう一度お願いします。', '모- 이치도 오네가이시마스.', '한 번 더 말씀해 주세요.'],
     ['ゆっくり話してください。', '윳쿠리 하나시테 쿠다사이.', '천천히 말씀해 주세요.'],
     ['英語は話せますか？', '에이고와 하나세마스카?', '영어 하실 수 있나요?'],
@@ -496,7 +513,40 @@ const tripPhraseGroups = [
 ];
 
 function TripJapanesePanel() {
-  return <div className="trip-tool-page japanese-tool-page"><div className="trip-tool-intro"><div><p className="eyebrow">USEFUL JAPANESE</p><h2>일본어 표현</h2><p>직원에게 보여주거나 그대로 읽기 쉽게 일본어 · 한글 발음 · 뜻을 분리했습니다. 카드를 누르면 일본어 문장이 복사됩니다.</p></div><b>{tripPhraseGroups.reduce((sum, group) => sum + group.items.length, 0)} phrases</b></div><div className="phrase-groups">{tripPhraseGroups.map((group) => <section key={group.title}><header>{group.icon}<h4>{group.title}</h4></header><div>{group.items.map(([jp, sound, meaning]) => <button key={jp} onClick={() => navigator.clipboard?.writeText(jp)}><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small><Copy size={14}/></button>)}</div></section>)}</div></div>;
+  const validIds = useMemo(() => new Set<TripPhraseCategoryId>(['all', ...tripPhraseGroups.map((group) => group.id)]), []);
+  const stored = localStorage.getItem('mytrip-phrase-category') as TripPhraseCategoryId | null;
+  const [category, setCategory] = useState<TripPhraseCategoryId>(stored && validIds.has(stored) ? stored : 'all');
+  const categoryNavRef = useRef<HTMLElement | null>(null);
+  const activeGroup = category === 'all' ? null : tripPhraseGroups.find((group) => group.id === category) || null;
+  const total = tripPhraseGroups.reduce((sum, group) => sum + group.items.length, 0);
+  useEffect(() => {
+    const active = categoryNavRef.current?.querySelector<HTMLElement>(`[data-phrase-category="${category}"]`);
+    active?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [category]);
+  function selectCategory(next: TripPhraseCategoryId) {
+    setCategory(next);
+    localStorage.setItem('mytrip-phrase-category', next);
+  }
+  function copyPhrase(jp: string) {
+    navigator.clipboard?.writeText(jp);
+  }
+  return <div className="trip-tool-page japanese-tool-page">
+    <div className="trip-tool-intro"><div><p className="eyebrow">USEFUL JAPANESE</p><h2>일본어 표현</h2><p>전체에서는 상황을 고르고, 상황 안에서는 그때 필요한 문장만 봅니다. 문장을 누르면 일본어가 바로 복사됩니다.</p></div><b>{total} phrases</b></div>
+    <nav className="phrase-category-nav" aria-label="일본어 표현 상황 선택" ref={categoryNavRef}>
+      <button data-phrase-category="all" className={category === 'all' ? 'active' : ''} onClick={() => selectCategory('all')}><Sparkles size={14}/><span>전체</span><b>{tripPhraseGroups.length}</b></button>
+      {tripPhraseGroups.map((group) => <button key={group.id} data-phrase-category={group.id} className={category === group.id ? 'active' : ''} onClick={() => selectCategory(group.id)}>{group.icon}<span>{group.title}</span><b>{group.items.length}</b></button>)}
+    </nav>
+    {category === 'all' ? <section className="phrase-overview" aria-label="일본어 상황별 전체보기">
+      <div className="phrase-overview-head"><div><p className="eyebrow">CHOOSE A SITUATION</p><h3>지금 필요한 상황을 선택</h3></div><span>39문장을 한 번에 펼치지 않습니다.</span></div>
+      <div className="phrase-overview-grid">{tripPhraseGroups.map((group) => {
+        const preview = group.items[0];
+        return <button key={group.id} className="phrase-overview-card" onClick={() => selectCategory(group.id)}><header><span>{group.icon}</span><div><strong>{group.title}</strong><small>{group.items.length}개 표현</small></div><ChevronRight size={18}/></header><p>{group.description}</p><div className="phrase-preview"><strong lang="ja">{preview[0]}</strong><span>{preview[2]}</span></div></button>;
+      })}</div>
+    </section> : activeGroup ? <section className="phrase-detail" aria-label={`${activeGroup.title} 일본어 표현`}>
+      <header className="phrase-detail-head"><button onClick={() => selectCategory('all')}><ArrowLeft size={15}/>상황 전체</button><div><span>{activeGroup.icon}</span><div><p className="eyebrow">SITUATION</p><h3>{activeGroup.title}</h3><small>{activeGroup.description}</small></div></div><b>{activeGroup.items.length}개</b></header>
+      <div className="phrase-detail-list">{activeGroup.items.map(([jp, sound, meaning], index) => <button key={jp} className="phrase-detail-card" onClick={() => copyPhrase(jp)}><span className="phrase-number">{String(index + 1).padStart(2, '0')}</span><div><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small></div><Copy size={16}/></button>)}</div>
+    </section> : null}
+  </div>;
 }
 
 function TripWeatherOutfitPanel({ trip, weather }: { trip: Trip; weather: WeatherDay[] }) {
@@ -628,6 +678,53 @@ function EventVisual({ event, mapUrl }: { event: TripEvent; mapUrl?: string | nu
   return mapUrl
     ? <a className="event-visual" href={mapUrl} target="_blank" rel="noreferrer" aria-label={`${event.title} 지도 열기`}>{content}</a>
     : <div className="event-visual">{content}</div>;
+}
+
+function TripFieldMapPanel({ trip }: { trip: Trip }) {
+  const today = todayInTimeZone('Asia/Tokyo');
+  const active = today >= trip.start_date && today <= trip.end_date;
+  const focusDate = active ? today : trip.start_date;
+  const now = active ? timeInTimeZone('Asia/Tokyo') : '00:00';
+  const events = trip.events.filter((event) => event.date === focusDate).sort((a, b) => compareDayEvents(a, b, trip.events));
+  const [view, setView] = useState<'route'|'food'|'hotel'>('route');
+  const visibleEvents = view === 'food'
+    ? events.filter((event) => event.kind === 'reservation')
+    : view === 'hotel'
+      ? events.filter((event) => event.kind === 'hotel' || /hotel|숙소|체크인|check-in/i.test(`${event.title} ${event.location || ''}`))
+      : events;
+  const relatedPlaces = trip.places.filter((place) => events.some((event) => candidatePlaceMatchesEvent(place, event)));
+  const mapTrip = { ...trip, events, places: relatedPlaces };
+  const current = events.find((event) => event.start_time && event.end_time && event.start_time <= now && event.end_time >= now);
+  const next = current || events.find((event) => (event.start_time || '99:99') >= now) || events.at(-1);
+  const counts = {
+    route: events.length,
+    food: events.filter((event) => event.kind === 'reservation').length,
+    hotel: events.filter((event) => event.kind === 'hotel' || /hotel|숙소|체크인|check-in/i.test(`${event.title} ${event.location || ''}`)).length,
+  };
+  const label = view === 'route' ? '오늘 전체 동선' : view === 'food' ? '오늘 식사' : '오늘 숙소';
+  return <div className="trip-field-map-page">
+    <section className="trip-map-toolbar">
+      <div><p className="eyebrow">FIELD MAP · {formatDay(focusDate)}</p><h2>오늘 지도</h2><p>여행 중에는 후보 리서치 대신 오늘 일정과 바로 이동할 장소만 봅니다.</p></div>
+      <div className="trip-map-tabs" role="tablist" aria-label="오늘 지도 보기">
+        <button className={view === 'route' ? 'active' : ''} onClick={() => setView('route')}><Route size={14}/>동선 <span>{counts.route}</span></button>
+        <button className={view === 'food' ? 'active' : ''} onClick={() => setView('food')}><Utensils size={14}/>식사 <span>{counts.food}</span></button>
+        <button className={view === 'hotel' ? 'active' : ''} onClick={() => setView('hotel')}><BedDouble size={14}/>숙소 <span>{counts.hotel}</span></button>
+      </div>
+    </section>
+    <div className="trip-map-layout">
+      <div className="trip-map-stage">
+        <TripMap trip={mapTrip} />
+        {next && <div className="trip-map-focus-card"><span>{current ? 'NOW' : 'NEXT'} · {next.start_time || '시간 미정'}</span><strong>{next.title}</strong>{next.location && <small>{next.location}</small>}{googleMapsEventUrl(next) && <a href={googleMapsEventUrl(next)!} target="_blank" rel="noreferrer"><Navigation size={13}/>Google Maps로 이동</a>}</div>}
+      </div>
+      <aside className="trip-map-stop-panel">
+        <header><div><span>{label}</span><strong>{visibleEvents.length}개</strong></div><small>목록은 이 패널 안에서만 스크롤됩니다.</small></header>
+        <div className="trip-map-stop-list">{visibleEvents.map((event) => {
+          const mapUrl = googleMapsEventUrl(event);
+          return <article className={event.completed_at ? 'completed' : ''} key={event.id}><div><b>{event.start_time || '--:--'}</b><span>{event.completed_at ? 'DONE' : event.kind === 'reservation' ? 'MEAL' : event.kind.toUpperCase()}</span></div><div><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}</div>{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer" aria-label={`${event.title} 지도 열기`}><ChevronRight size={17}/></a>}</article>;
+        })}</div>
+      </aside>
+    </div>
+  </div>;
 }
 
 function DiscoverPanel({ trip, plannerName, reload }: { trip: Trip; plannerName: string; reload: () => void }) {

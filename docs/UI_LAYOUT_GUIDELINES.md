@@ -7,10 +7,15 @@ This project treats visual verification as part of implementation, not as a fina
 - Breakpoints are chosen where content stops reading well, not to match a named device model.
 - Mobile source order follows task priority. TRIP mode prioritizes `status -> NOW/NEXT -> field actions -> secondary detail`.
 - Do not solve density problems by shrinking core text below readable sizes.
-- Avoid horizontal scrolling on mobile except components where horizontal browsing is an explicit interaction: `NOW/NEXT` and `Schedule > 전체보기`.
+- Avoid horizontal scrolling on mobile except components where horizontal browsing is an explicit interaction: `NOW/NEXT`, `Schedule > 전체보기`, and compact navigation rails such as phrase-category chips. Navigation rails must keep the active state obvious.
 - Prefer container-relative sizing (`minmax`, `clamp`, percentages, container queries where useful) over hard-coded desktop card widths.
 - A control that matters in the field should target roughly 44 CSS px on touch layouts. Never rely on hover for critical actions.
 - PLAN optimizes for comparison/editing. TRIP optimizes for immediate action and one-handed scanning.
+- Long information sets use `overview -> category/choice -> detail`. Do not render every category expanded by default just because the data is grouped.
+- Secondary TRIP information that competes for the same moment should use a local switcher/segmented view instead of stacking multiple long sections vertically.
+- Contextual actions should deep-link to the relevant detail state when possible. Example: a meal card opens restaurant Japanese; a transport card opens transport Japanese.
+- A top-level label may need different content by mode. Reuse data, not necessarily the whole screen: PLAN `지도` is for research; TRIP `지도` is for today's route, meals and hotel.
+- An overview/index should fit in the first common mobile viewport when feasible. Put long content behind an explicit category or local tab rather than making the index itself a long feed.
 
 ## Typography floor
 
