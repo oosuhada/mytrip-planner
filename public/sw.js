@@ -1,5 +1,5 @@
-const CACHE = 'mytrip-2026-v6';
-const PACK_CACHE = 'mytrip-offline-pack-v1';
+const CACHE = 'mytrip-2026-v7';
+const PACK_CACHE = 'mytrip-offline-pack-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -33,7 +33,7 @@ async function networkFirst(request, timeoutMs = 4000) {
 
 async function cacheFirst(request, cacheName = CACHE) {
   const cache = await caches.open(cacheName);
-  const cached = await caches.match(request);
+  const cached = await cache.match(request);
   if (cached) return cached;
   const response = await fetch(request);
   if (response.ok || response.type === 'opaque') await cache.put(request, response.clone());
@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(cacheFirst(request).catch(() => caches.match('/index.html')));
+    event.respondWith(cacheFirst(request).catch(async () => (await caches.open(CACHE)).match('/index.html')));
     return;
   }
 

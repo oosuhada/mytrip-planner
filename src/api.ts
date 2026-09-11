@@ -9,7 +9,8 @@ export type PendingMutation = {
 const DB_NAME = 'mytrip-offline';
 const MUTATION_STORE = 'mutations';
 const SNAPSHOT_STORE = 'snapshots';
-const PACK_CACHE = 'mytrip-offline-pack-v1';
+const SNAPSHOT_VERSION = 'v2';
+const PACK_CACHE = 'mytrip-offline-pack-v2';
 const SYNC_EVENT = 'mytrip:sync-state';
 
 export type OfflineSnapshot<T> = { key: string; value: T; updated_at: number };
@@ -82,11 +83,11 @@ export async function writeOfflineSnapshot<T>(key: string, value: T): Promise<Of
   return snapshot;
 }
 
-export const readTripSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`trip:${tripId}`);
-export const writeTripSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`trip:${tripId}`, value);
-export const readWeatherSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`weather:${tripId}`);
-export const writeWeatherSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`weather:${tripId}`, value);
-export const readOfflinePackInfo = (tripId: string) => readOfflineSnapshot<OfflinePackInfo>(`pack:${tripId}`);
+export const readTripSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`trip:${SNAPSHOT_VERSION}:${tripId}`);
+export const writeTripSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`trip:${SNAPSHOT_VERSION}:${tripId}`, value);
+export const readWeatherSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`weather:${SNAPSHOT_VERSION}:${tripId}`);
+export const writeWeatherSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`weather:${SNAPSHOT_VERSION}:${tripId}`, value);
+export const readOfflinePackInfo = (tripId: string) => readOfflineSnapshot<OfflinePackInfo>(`pack:${SNAPSHOT_VERSION}:${tripId}`);
 
 async function cacheResources(cacheName: string, urls: string[]) {
   const cache = await caches.open(cacheName);
@@ -157,7 +158,7 @@ export async function prepareOfflinePack(input: {
     storage_bytes: assets.bytes + snapshotBytes,
     persisted,
   };
-  await writeOfflineSnapshot(`pack:${input.tripId}`, info);
+  await writeOfflineSnapshot(`pack:${SNAPSHOT_VERSION}:${input.tripId}`, info);
   return info;
 }
 

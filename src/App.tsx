@@ -437,6 +437,8 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
   const restaurants = new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const));
   const decisions = (trip.decision_slots || []).filter((slot) => slot.date === focusDate);
   const reservationRows = mealSlots.map((slot) => ({ slot, restaurant: slot.selected_restaurant_id ? restaurants.get(slot.selected_restaurant_id) : undefined })).filter((row) => row.restaurant);
+  const coreMealSlots = mealSlots.filter((slot) => slot.selected_restaurant_id && !/optional|snack|dessert/i.test(slot.meal_type || ''));
+  const roamEvents = events.filter((event) => event.kind === 'activity' && !/입국|출국|보안|게이트|대욕장|호텔 휴식|ICN|KIX/i.test(event.title));
   const dayWeather = weather.find((item) => item.date === focusDate);
   const progressEvents = events.filter((event) => tripEventStatus(event) !== 'CANCELLED');
   const completedCount = progressEvents.filter((event) => tripEventStatus(event) === 'DONE').length;
@@ -505,6 +507,12 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
   return <div className="trip-live-page">
     <section className="trip-live-hero">
       <div><p className="eyebrow">{active ? 'LIVE TRIP' : 'TRIP MODE PREVIEW'} · {formatDay(focusDate)}</p><h2>{active ? '지금 필요한 것만.' : '여행 중 화면 미리보기'}</h2><p>{active ? `${now} 일본 시간 기준으로 현재·다음 일정과 바로 쓸 정보만 보여줍니다.` : '출발하면 이 화면이 기본으로 열리고 오늘 날짜 일정에 자동 맞춰집니다.'}</p></div>
+    </section>
+
+    <section className="trip-day-rhythm" aria-label="오늘 먹고 돌아다니기">
+      <header><div><Utensils size={16}/><span><p className="eyebrow">EAT · EXPLORE</p><h3>오늘 먹고 · 돌아다니기</h3></span></div><b>{coreMealSlots.length}끼 · {roamEvents.length}곳</b></header>
+      <div className="trip-day-meals">{coreMealSlots.map((slot, index) => { const restaurant = slot.selected_restaurant_id ? restaurants.get(slot.selected_restaurant_id) : undefined; return <article key={slot.id}><span>{index + 1}끼 · {slot.time || '--:--'}</span><strong>{restaurant?.name || slot.label}</strong><small>{slot.label}</small></article>; })}</div>
+      {roamEvents.length > 0 && <div className="trip-day-roam"><span><MapPin size={13}/>돌아다닐 곳</span>{roamEvents.map((event) => <button key={event.id} onClick={() => onOpenTab('schedule')}><b>{event.start_time || ''}</b>{event.title}</button>)}</div>}
     </section>
 
     <section className="trip-field-dashboard" aria-label="오늘 여행 현황">
@@ -901,18 +909,23 @@ function ScheduleBoard({ trip, weather, reload, tripMode }: { trip: Trip; weathe
     <div className="schedule-intro"><div><h2>Day plan</h2><p>일정을 잡아 원하는 날짜로 옮기세요. 시간은 카드에서 바로 수정할 수 있습니다.</p></div><span className="hint"><GripVertical size={15} /> drag to move</span></div>
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div className="day-grid" ref={dayGridRef} data-initial-day={initialDay} data-view-mode={viewMode}>
-        {days.map((date) => <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={trip.events.filter((e) => e.date === date)} weather={weather.find((w) => w.date === date)} reload={reload} allowCompletion={tripMode && tripIsActive} />)}
+        {days.map((date) => {
+          const dayEvents = trip.events.filter((event) => event.date === date);
+          const mealCount = trip.meal_slots.filter((slot) => slot.date === date && slot.selected_restaurant_id && !/optional|snack|dessert/i.test(slot.meal_type || '')).length;
+          const roamCount = dayEvents.filter((event) => event.kind === 'activity' && !/입국|출국|보안|게이트|대욕장|호텔 휴식|ICN|KIX/i.test(event.title)).length;
+          return <DayColumn key={date} date={date} index={days.indexOf(date)} active={date === selectedDay} events={dayEvents} weather={weather.find((w) => w.date === date)} mealCount={mealCount} roamCount={roamCount} reload={reload} allowCompletion={tripMode && tripIsActive} />;
+        })}
       </div>
     </DndContext>
   </div>;
 }
 
-function DayColumn({ date, index, active, events, weather, reload, allowCompletion }: { date: string; index: number; active: boolean; events: TripEvent[]; weather?: WeatherDay; reload: () => void; allowCompletion: boolean }) {
+function DayColumn({ date, index, active, events, weather, mealCount, roamCount, reload, allowCompletion }: { date: string; index: number; active: boolean; events: TripEvent[]; weather?: WeatherDay; mealCount: number; roamCount: number; reload: () => void; allowCompletion: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${date}` });
   const walking = events.find((event) => typeof event.meta?.daily_walking === 'string')?.meta?.daily_walking;
   const orderedEvents = [...events].sort((a, b) => compareDayEvents(a, b, events));
   return <section className={`day-column ${active ? 'mobile-active' : ''} ${isOver ? 'drop-active' : ''}`} ref={setNodeRef} data-day-date={date}>
-    <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong>{typeof walking === 'string' && <small className="day-walking">보행 {walking}</small>}</div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
+    <header><div><span>DAY {index + 1}</span><strong>{formatDay(date)}</strong><small className="day-rhythm-count"><Utensils size={11}/>{mealCount}끼 <MapPin size={11}/>{roamCount}곳</small>{typeof walking === 'string' && <small className="day-walking">보행 {walking}</small>}</div>{weather && <div className="day-weather"><span className="weather-symbol">{weatherIcon(weather.code)}</span><div><b>{Math.round(weather.max)}° / {Math.round(weather.min)}°</b><small>{weatherLabel(weather.code)} · 강수 {weather.rain}%</small></div></div>}</header>
     <div className="day-events">
       {orderedEvents.length ? orderedEvents.map((event) => <EventCard key={event.id} event={event} reload={reload} allowCompletion={allowCompletion} />) : <div className="empty-day"><span>비어 있는 날</span><small>장소나 일정을 여기로 드래그</small></div>}
     </div>

@@ -11,6 +11,9 @@ This project treats visual verification as part of implementation, not as a fina
 - Prefer container-relative sizing (`minmax`, `clamp`, percentages, container queries where useful) over hard-coded desktop card widths.
 - A control that matters in the field should target roughly 44 CSS px on touch layouts. Never rely on hover for critical actions.
 - PLAN optimizes for comparison/editing. TRIP optimizes for immediate action and one-handed scanning.
+- The trip-day skeleton is `meals + named destinations`; transit, hotel operations and check-in/out are scaffolding. A full sightseeing day should make the eating rhythm and actual places to visit obvious before logistics.
+- For this trip, 9/13–9/16 should normally expose three real meal slots (`brunch/first meal -> late lunch -> late dinner`) unless a transport constraint makes that unreasonable. Desserts/snacks do not substitute for a meal.
+- Day summaries should expose meal and destination counts so a logistics-heavy but experience-empty day is visible during QC.
 - TRIP state is explicit: `PLANNED -> DONE | SKIPPED | CANCELLED`. Resolved events must not remain the current/next action, and changing a meal or Plan B resets the linked event to `PLANNED`.
 - TRIP preview is read-only for execution state. Future events cannot be accidentally marked done/skipped before the trip begins.
 - Field-critical PATCH actions are offline-first: apply optimistically, queue locally, expose pending-sync state, and replay when connectivity returns.
