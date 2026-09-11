@@ -167,6 +167,14 @@ npm run check
 npm start
 ```
 
+### Responsive UI acceptance
+
+Responsive work follows the project-specific acceptance rules in
+[`docs/UI_LAYOUT_GUIDELINES.md`](docs/UI_LAYOUT_GUIDELINES.md). Breakpoints are
+content-driven, TRIP mode keeps immediate actions ahead of secondary detail,
+and responsive changes are verified in real Chrome at desktop, mobile, and an
+intermediate width before deployment.
+
 ## Environment
 
 Copy `.env.example` to `.env` only on the deployment host.
