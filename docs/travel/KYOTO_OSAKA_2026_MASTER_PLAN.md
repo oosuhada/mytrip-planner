@@ -297,11 +297,9 @@ Trip use case: **2026-09-13, Kansai Airport → Kyoto, adult one-way**.
 
 ### HARUKA decision
 
-- **Do not assume Klook is cheapest.**
-- The only exact externally verifiable route baseline in this review is **JR-WEST ¥2,200/adult**.
-- On purchase day, select **KIX → Kyoto / adult / 9/13** in Klook and KKday and compare the **final payable amount**, including whether a coupon is actually accepted.
-- If neither final reseller price is clearly below ¥2,200, buy JR-WEST official.
-- HARUKA is still the preferred arrival transport because luggage + likely rain + a direct ride to Kyoto are worth more here than saving a small amount through multiple local-train transfers.
+- **PURCHASED 2026-09-11 for both Oosu + Domenic.**
+- Price-shopping is finished; only the QR / exchange / boarding instructions need to be saved offline on 9/12 night.
+- HARUKA remains the preferred arrival transport because luggage + likely rain + a direct ride to Kyoto are worth more here than saving a small amount through multiple local-train transfers.
 
 Official JR-WEST: https://www.westjr.co.jp/global/en/ticket/westqr/haruka/
 
@@ -323,23 +321,24 @@ Ultra-budget: **3GB each** only if video and large uploads stay on hotel Wi-Fi.
 | **Saily** | 3GB / 30d | **US$7.99** | KDDI / SoftBank listed | Yes | Install in app; activate within provider window | Fine UX, no price win |
 | **Airalo** | 3GB / 30d | **about US$8** | Japan package lists SoftBank + another available network | Supported when device/network allows | Install before departure, connects/activates on arrival | Familiar brand, slightly higher price |
 
-## 5GB options
+## Selected 5GB option + backups
 
 | Provider | Data / validity | Current published price | Network | Tethering | Activation | Verdict |
 |---|---|---:|---|---|---|---|
-| **TravelSim Asia** | 5GB / 30d | **US$9.99** | NTT Docomo / Rakuten / KDDI au / SoftBank listed | Yes | Pre-install supported | Lowest published 5GB candidate |
-| **Nomad** | 5GB / 30d | **US$10.00** | KDDI au / SoftBank | Yes | QR install; auto-start on destination network | **Recommended default**: price + simplicity |
-| **Ubigi** | 5GB / 15d | **US$10 / about ¥1,700** | KDDI + NTT Docomo | Data sharing supported | Smartstart; pre-install | **Recommended alternative** for network/value |
-| **Saily** | 5GB / 30d | **US$10.99** | KDDI / SoftBank listed | Yes | App install | Good, but no price advantage |
-| **Airalo** | Comparable 5GB package | **about US$11 for 30d**; selector may show a shorter 7-day 5GB option around US$10 | SoftBank + available partner | Supported | Pre-install then connect in Japan | Use only if exact checkout plan beats others |
+| **Stellar eSIM** | **5GB / 20d** | **US$1.75/person in the captured offer** | 5G shown on captured offer | Check plan details at checkout | Pre-install before departure | **Selected primary: buy one each for Oosu + Domenic** |
+| **Eskimo affiliate freebie** | **1GB / no expiry** | **Free** | Global coverage includes Japan | Provider supports hotspot on fixed-data plans | New user through an eligible affiliate link | **Backup #1: only claim when the official signup screen explicitly shows free 1GB** |
+| **Nomad Trial** | **1GB / 3d** | **Free** | Japan included | Yes | Nomad app; new user; no credit card | **Backup #2: 3-day emergency data** |
+| **Nomad paid** | 5GB / 30d | US$10 | KDDI au + SoftBank | Yes | QR install | Paid fallback only |
+| **Ubigi** | 5GB / 15d | about ¥1,700 | KDDI + NTT Docomo | Yes | Smartstart | Paid fallback only |
+| **Saily** | 5GB / 30d | US$10.99 | KDDI / SoftBank listed | Yes | App install | Paid fallback only |
 
 ### eSIM recommendation
 
-1. **Nomad 5GB US$10/person** — default value recommendation.
-2. **TravelSim Asia 5GB US$9.99/person** — price-first option if comfortable with a smaller provider.
-3. **Ubigi 5GB / 15d US$10/person** — equally strong alternative if its network mix is preferred.
+1. **Stellar 5GB / 20d / US$1.75 each** — selected primary, one eSIM per traveler.
+2. **Eskimo affiliate 1GB / no expiry / free** — backup #1; affiliate-link signup screen must show the 1GB offer before claiming.
+3. **Nomad Trial 1GB / 3d / free** — backup #2; Japan is included and no credit card is required.
 
-The savings from 3GB are only a few dollars, so 5GB is safer for two travelers independently navigating in rain.
+Keep the two free backups unactivated unless the Stellar line fails or runs out.
 
 ### eSIM checklist before payment
 
@@ -360,6 +359,9 @@ The savings from 3GB are only a few dollars, so 5GB is safer for two travelers i
 Provider pages:
 
 - Nomad: https://www.nomadesim.com/japan-eSIM/
+- Nomad Trial: https://www.nomadesim.com/documents/landing-trial-plan
+- Eskimo affiliate program: https://www.eskimo.travel/en/affiliate
+- Stellar comparison page: https://esimdb.com/japan/stellar
 - Ubigi: https://cellulardata.ubigi.com/rates-and-coverage/japan-data-plans/
 - Airalo: https://www.airalo.com/japan-esim
 - Saily: https://saily.com/esim-japan/
@@ -556,9 +558,11 @@ Japan electricity reference: https://www.japan.travel/en/plan/plug-and-electrici
 
 ## 9/10–9/11
 
-- [ ] Compare **final checkout** KIX→Kyoto adult 9/13 price on Klook vs KKday against JR-WEST ¥2,200
-- [ ] Buy HARUKA
-- [ ] Buy **two 5GB eSIMs**
+- [x] Compare **final checkout** KIX→Kyoto adult 9/13 price and choose seller
+- [x] Buy HARUKA for **Oosu + Domenic**
+- [ ] Buy **Stellar 5GB / 20d eSIM × 2 (US$1.75 each offer)**
+- [ ] Claim optional backup: **Eskimo affiliate free 1GB / no expiry**
+- [ ] Claim optional backup: **Nomad Trial free 1GB / 3d**
 - [ ] Install both eSIM profiles on Wi-Fi
 - [ ] Reserve Kura Sushi Kyoto Teramachi — 9/13 ~16:30
 - [ ] Reserve Sushiro Kyoto Gion — 9/14 ~11:15
