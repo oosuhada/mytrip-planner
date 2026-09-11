@@ -14,6 +14,11 @@ This project treats visual verification as part of implementation, not as a fina
 - TRIP state is explicit: `PLANNED -> DONE | SKIPPED | CANCELLED`. Resolved events must not remain the current/next action, and changing a meal or Plan B resets the linked event to `PLANNED`.
 - TRIP preview is read-only for execution state. Future events cannot be accidentally marked done/skipped before the trip begins.
 - Field-critical PATCH actions are offline-first: apply optimistically, queue locally, expose pending-sync state, and replay when connectivity returns.
+- A trip that has been explicitly saved for offline use must open from a deep link without network access. Keep a local trip snapshot and last usable weather snapshot in IndexedDB; never overwrite a usable weather snapshot with an empty/failed response.
+- Reopening a recently loaded trip should render from local snapshot first and avoid redundant trip/weather requests until the relevant TTL expires. Real-time update signals and successful mutation replay may force a refresh.
+- Offline packs should cache the current same-origin app shell/assets and operational trip data only. Prune obsolete hashed assets on refresh so offline storage does not grow indefinitely.
+- Do not bulk-cache third-party map tiles from the public OSM tile service for offline use. In TRIP mode, render a lightweight coordinate-based offline route view from saved event coordinates; load the normal MapLibre/OSM map only when online.
+- Offline readiness must be visible to the traveler: expose saved/not-saved state, last refresh time and approximate pack size, and make refresh an explicit action.
 - Use progressive disclosure for long operational flows. Group consecutive transport steps into one journey card and keep the full step list collapsed until requested.
 - In the final three days before departure, surface blocking/urgent preparation and `RESERVE NOW` work above the full checklist.
 - Long information sets use `overview -> category/choice -> detail`. Do not render every category expanded by default just because the data is grouped.
@@ -67,6 +72,9 @@ For a responsive change, also smoke-test an intermediate width around 1024–118
 - Completion/progress states must represent explicit user state. Time-based inference may be shown only as secondary context and must not masquerade as completion.
 - Preview mode must not mutate trip-execution state.
 - Test field-critical PATCH controls with the browser fully offline, then restore connectivity and verify the queued change reaches SQLite exactly once.
+- After building an offline pack, disable network access and hard-navigate directly to the trip URL. Verify trip data, Japanese phrases and the offline route map remain usable without a warm in-memory app session.
+- Record offline-pack cache entry count and approximate raw bytes. Treat unexpectedly large storage use as a regression; do not rely on opaque cross-origin cache entries for map coverage.
+- Reload the same trip within the local snapshot TTL and verify no redundant `/api/trips/:id` or `/api/weather` request is emitted when valid cached data already exists.
 - Changing the selected meal or decision option must clear stale completion state on its linked event.
 - Current/next calculations must ignore `DONE`, `SKIPPED`, and `CANCELLED` events.
 - Weather advice that can alter a route should use the next action's hourly window and a date-appropriate location rather than only the trip-wide daily maximum.

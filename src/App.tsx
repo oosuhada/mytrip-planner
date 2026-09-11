@@ -4,9 +4,10 @@ import { io } from 'socket.io-client';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, Copy, ExternalLink, GripVertical,
   ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  AlertTriangle, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
+  AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
 } from 'lucide-react';
-import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, subscribeSyncState } from './api';
+import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripSnapshot, writeWeatherSnapshot } from './api';
+import type { OfflinePackInfo } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay, WeatherHour } from './types';
 
 const socket = io({ autoConnect: true });
@@ -91,7 +92,7 @@ function HomePage() {
 
 type WorkspaceMode = 'plan' | 'trip';
 type Tab = 'today' | 'trip-weather' | 'phrases' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
-type TripPhraseCategoryId = 'all' | 'restaurant' | 'diet' | 'transport' | 'hotel' | 'shopping' | 'help';
+type TripPhraseCategoryId = 'all' | 'restaurant' | 'diet' | 'transport' | 'hotel' | 'shopping' | 'help' | 'airport' | 'convenience' | 'sightseeing' | 'health' | 'emergency';
 type TripEventStatus = 'PLANNED' | 'DONE' | 'SKIPPED' | 'CANCELLED';
 type TripLiveGroup = { id: string; title: string; events: TripEvent[] };
 
@@ -116,37 +117,82 @@ function TripPage({ tripId }: { tripId: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('mytrip-sidebar-open') !== '0');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncState, setSyncState] = useState({ online: navigator.onLine, pending: 0, failed: false });
+  const [offlinePack, setOfflinePack] = useState<OfflinePackInfo | null>(null);
+  const [offlinePacking, setOfflinePacking] = useState(false);
+  const [offlinePackError, setOfflinePackError] = useState('');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceNetwork = false) => {
+    const cached = await readTripSnapshot<Trip>(tripId).catch(() => null);
+    if (cached) setTrip(await applyPendingMutationsToTrip(cached.value));
+    const freshEnough = Boolean(cached && Date.now() - cached.updated_at < 5 * 60 * 1000);
+    if (!navigator.onLine || (!forceNetwork && freshEnough)) return;
     const fresh = await api<Trip>(`/api/trips/${tripId}`);
+    await writeTripSnapshot(tripId, fresh).catch(() => undefined);
     setTrip(await applyPendingMutationsToTrip(fresh));
   }, [tripId]);
+  const reload = useCallback(() => load(true), [load]);
+  const loadWeather = useCallback(async (currentTrip: Trip, forceNetwork = false) => {
+    const cached = await readWeatherSnapshot<{ daily: WeatherDay[]; hourly: WeatherHour[] }>(currentTrip.id).catch(() => null);
+    const cachedUsable = Boolean(cached?.value?.daily?.length);
+    if (cachedUsable && cached) {
+      setWeather(cached.value.daily || []);
+      setWeatherHours(cached.value.hourly || []);
+    }
+    const today = todayInTimeZone('Asia/Tokyo');
+    const active = today >= currentTrip.start_date && today <= currentTrip.end_date;
+    const ttl = active ? 20 * 60 * 1000 : 2 * 60 * 60 * 1000;
+    if (!navigator.onLine || (!forceNetwork && cachedUsable && cached && Date.now() - cached.updated_at < ttl)) {
+      return cachedUsable && cached ? cached.value : { daily: [] as WeatherDay[], hourly: [] as WeatherHour[] };
+    }
+    const days = dateRange(currentTrip.start_date, currentTrip.end_date);
+    const results = await Promise.allSettled(days.map(async (date) => {
+      const anchor = weatherAnchorForDate(currentTrip, date);
+      return api<{ daily: WeatherDay[]; hourly?: WeatherHour[] }>(`/api/weather?lat=${anchor.lat}&lng=${anchor.lng}&start=${date}&end=${date}`);
+    }));
+    const fulfilled = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+    const daily = fulfilled.flatMap((result) => result.daily).sort((a, b) => a.date.localeCompare(b.date));
+    const hourly = fulfilled.flatMap((result) => result.hourly || []).sort((a, b) => a.time.localeCompare(b.time));
+    if (daily.length) {
+      await writeWeatherSnapshot(currentTrip.id, { daily, hourly }).catch(() => undefined);
+      setWeather(daily);
+      setWeatherHours(hourly);
+      return { daily, hourly };
+    }
+    return cachedUsable && cached ? cached.value : { daily: [] as WeatherDay[], hourly: [] as WeatherHour[] };
+  }, []);
   useEffect(() => {
+    readOfflinePackInfo(tripId).then((snapshot) => setOfflinePack(snapshot?.value || null)).catch(() => undefined);
     pendingMutationCount().then((pending) => setSyncState((state) => ({ ...state, pending }))).catch(() => undefined);
-    flushQueuedMutations().then(async ({ flushed }) => { await load(); if (flushed > 0) await load(); }).catch(() => load());
+    flushQueuedMutations().then(({ flushed }) => load(flushed > 0)).catch(() => load(false));
     socket.emit('trip:join', tripId);
-    const refresh = (data: { tripId: string }) => data.tripId === tripId && load();
+    const refresh = (data: { tripId: string }) => data.tripId === tripId && reload();
     socket.on('trip:updated', refresh);
     const unsubscribe = subscribeSyncState((detail) => {
       setSyncState({ online: detail.online, pending: detail.pending, failed: Boolean(detail.failed) });
       if (detail.mutation) setTrip((current) => current ? applyQueuedMutationToTrip(current, detail.mutation!) : current);
-      if (detail.online) load().catch(() => undefined);
+      if (detail.flushed) reload().catch(() => undefined);
     });
     return () => { unsubscribe(); socket.emit('trip:leave', tripId); socket.off('trip:updated', refresh); };
-  }, [tripId, load]);
+  }, [tripId, load, reload]);
 
   useEffect(() => {
     if (!trip) return;
-    const days = dateRange(trip.start_date, trip.end_date);
-    Promise.allSettled(days.map(async (date) => {
-      const anchor = weatherAnchorForDate(trip, date);
-      return api<{ daily: WeatherDay[]; hourly?: WeatherHour[] }>(`/api/weather?lat=${anchor.lat}&lng=${anchor.lng}&start=${date}&end=${date}`);
-    })).then((results) => {
-      const fulfilled = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
-      setWeather(fulfilled.flatMap((result) => result.daily).sort((a, b) => a.date.localeCompare(b.date)));
-      setWeatherHours(fulfilled.flatMap((result) => result.hourly || []).sort((a, b) => a.time.localeCompare(b.time)));
-    }).catch(() => { setWeather([]); setWeatherHours([]); });
-  }, [trip?.id, trip?.start_date, trip?.end_date]);
+    loadWeather(trip).catch(() => undefined);
+  }, [trip?.id, trip?.start_date, trip?.end_date, loadWeather]);
+
+  async function saveOfflinePack() {
+    if (!trip || offlinePacking || !navigator.onLine) return;
+    setOfflinePacking(true);
+    setOfflinePackError('');
+    try {
+      if ('serviceWorker' in navigator) await navigator.serviceWorker.ready;
+      const packWeather = weather.length ? { daily: weather, hourly: weatherHours } : await loadWeather(trip, true);
+      const info = await prepareOfflinePack({ tripId: trip.id, trip, weather: packWeather.daily, weatherHours: packWeather.hourly });
+      setOfflinePack(info);
+    } catch (error) {
+      setOfflinePackError(error instanceof Error ? error.message : '오프라인 저장에 실패했습니다.');
+    } finally { setOfflinePacking(false); }
+  }
 
   useEffect(() => {
     if (!trip || initialTabResolved.current) return;
@@ -206,22 +252,23 @@ function TripPage({ tripId }: { tripId: string }) {
 
       <section className="main-panel">
         <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
+        <OfflinePackBar info={offlinePack} saving={offlinePacking} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} />
         {(!syncState.online || syncState.pending > 0 || syncState.failed) && <div className={`sync-status-bar ${syncState.online ? 'syncing' : 'offline'}`}><span>{syncState.online ? <RefreshCw size={14}/> : <WifiOff size={14}/>}<b>{syncState.online ? (syncState.failed ? '동기화 재시도 필요' : '변경 동기화 중') : '오프라인'}</b>{syncState.pending > 0 && <em>{syncState.pending}개 변경 대기</em>}</span><small>{syncState.online ? '연결된 상태에서 자동 저장합니다.' : '일정 변경은 이 기기에 저장하고 연결되면 자동 반영합니다.'}</small></div>}
         <div className="content-area">
-          {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} weatherHours={weatherHours} reload={load} onOpenTab={selectTab} />}
+          {workspaceMode === 'trip' && tab === 'today' && <TripLivePanel trip={trip} weather={weather} weatherHours={weatherHours} reload={reload} onOpenTab={selectTab} />}
           {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
-          {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={load} />}
-          {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={load} tripMode={workspaceMode === 'trip'} />}
-          {tab === 'map' && (workspaceMode === 'trip' ? <TripFieldMapPanel trip={trip} /> : <DiscoverPanel trip={trip} plannerName={plannerName} reload={load} />)}
-          {workspaceMode === 'plan' && tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={load} />}
-          {workspaceMode === 'plan' && tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={load} />}
-          {workspaceMode === 'plan' && tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={load} />}
+          {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={reload} />}
+          {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={reload} tripMode={workspaceMode === 'trip'} />}
+          {tab === 'map' && (workspaceMode === 'trip' ? <TripFieldMapPanel trip={trip} online={syncState.online} /> : <DiscoverPanel trip={trip} plannerName={plannerName} reload={reload} />)}
+          {workspaceMode === 'plan' && tab === 'votes' && <VotePanel trip={trip} plannerName={plannerName} reload={reload} />}
+          {workspaceMode === 'plan' && tab === 'packing' && <PackingPanel trip={trip} weather={weather} reload={reload} />}
+          {workspaceMode === 'plan' && tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={reload} />}
         </div>
       </section>
       {mobileMenuOpen && <MobileMenuDrawer trip={trip} mode={workspaceMode} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelectMode={selectMode} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} />}
-      {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={load} />}
-      <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} mode={workspaceMode} reload={load} />
+      {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={reload} />}
+      <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} mode={workspaceMode} reload={reload} />
     </main>
   );
 }
@@ -356,6 +403,16 @@ function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { 
       <button className="primary" onClick={onAdd}><Plus size={17} /> 일정 추가</button>
     </div>
   </header>;
+}
+
+function OfflinePackBar({ info, saving, online, error, onSave }: { info: OfflinePackInfo | null; saving: boolean; online: boolean; error: string; onSave: () => void }) {
+  const stale = Boolean(info && Date.now() - info.saved_at > 12 * 60 * 60 * 1000);
+  const savedAt = info ? new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(info.saved_at)) : '';
+  const storage = info?.storage_bytes ? formatBytes(info.storage_bytes) : null;
+  return <div className={`offline-pack-bar ${info ? 'ready' : 'empty'} ${!online ? 'offline' : ''} ${error ? 'error' : ''}`}>
+    <div className="offline-pack-copy"><span className="offline-pack-icon">{error ? <AlertTriangle size={16}/> : info ? <Check size={16}/> : <Download size={16}/>}</span><span><strong>{error ? '오프라인 저장 확인 필요' : info ? '오프라인 사용 준비됨' : '여행 전체 오프라인 저장'}</strong><small>{error || (info ? `앱 · 일정 · 일본어 · ${info.weather_saved ? '날씨' : '날씨 제외'} · 좌표 기반 오프라인 동선 지도 저장` : 'Wi-Fi에서 한 번 저장하면 일본에서 데이터 없이 핵심 화면을 열 수 있습니다.')}</small></span></div>
+    <div className="offline-pack-actions">{info && <span>{savedAt}{storage ? ` · ${storage}` : ''}{stale ? ' · 갱신 권장' : ''}</span>}<button onClick={onSave} disabled={saving || !online}>{saving ? '저장 중…' : !online ? (info ? '저장됨' : '연결 후 저장') : info ? '오프라인 갱신' : '지금 저장'}</button></div>
+  </div>;
 }
 
 function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { trip: Trip; weather: WeatherDay[]; weatherHours: WeatherHour[]; reload: () => void; onOpenTab: (tab: Tab) => void }) {
@@ -583,21 +640,172 @@ const tripPhraseGroups = [
   ] },
 ];
 
+type PhraseTuple = [string, string, string];
+
+const tripPhraseAdditions: Partial<Record<Exclude<TripPhraseCategoryId, 'all'>, PhraseTuple[]>> = {
+  restaurant: [
+    ['メニューを見せてください。', '메뉴-오 미세테 쿠다사이.', '메뉴를 보여주세요.'],
+    ['注文をお願いします。', '추-몬오 오네가이시마스.', '주문할게요.'],
+    ['これは何ですか？', '코레와 난데스카?', '이건 무엇인가요?'],
+    ['一番人気はどれですか？', '이치반 닌키와 도레데스카?', '가장 인기 있는 메뉴가 뭐예요?'],
+    ['ご飯を少なめにできますか？', '고항오 스쿠나메니 데키마스카?', '밥 양을 적게 할 수 있나요?'],
+    ['取り皿を二枚ください。', '토리자라오 니마이 쿠다사이.', '앞접시 두 개 주세요.'],
+    ['お会計をお願いします。', '오카이케이오 오네가이시마스.', '계산 부탁합니다.'],
+    ['現金だけですか？', '겐킨 다케데스카?', '현금만 가능한가요?'],
+    ['ラストオーダーは何時ですか？', '라스토 오-다-와 난지데스카?', '라스트 오더가 몇 시인가요?'],
+    ['何分くらい待ちますか？', '난푼 쿠라이 마치마스카?', '몇 분 정도 기다려야 하나요?'],
+  ],
+  diet: [
+    ['エビやカニは入っていますか？', '에비야 카니와 하잇테이마스카?', '새우나 게가 들어 있나요?'],
+    ['タコやイカは入っていますか？', '타코야 이카와 하잇테이마스카?', '문어나 오징어가 들어 있나요?'],
+    ['魚だけなら大丈夫です。', '사카나 다케나라 다이조-부 데스.', '생선만이라면 괜찮아요.'],
+    ['唐辛子は入っていますか？', '토-가라시와 하잇테이마스카?', '고추가 들어 있나요?'],
+    ['わさび抜きでお願いします。', '와사비 누키데 오네가이시마스.', '와사비 빼주세요.'],
+    ['ソースは別にしてください。', '소-스와 베츠니 시테 쿠다사이.', '소스는 따로 주세요.'],
+    ['アレルギーではありませんが、食べられません。', '아레루기-데와 아리마센가, 타베라레마센.', '알레르기는 아니지만 먹지 못합니다.'],
+    ['この料理には何が入っていますか？', '코노 료-리니와 나니가 하잇테이마스카?', '이 요리에는 무엇이 들어 있나요?'],
+  ],
+  transport: [
+    ['京都駅までいくらですか？', '교토에키마데 이쿠라데스카?', '교토역까지 얼마인가요?'],
+    ['ここで乗り換えですか？', '코코데 노리카에 데스카?', '여기서 환승하나요?'],
+    ['次の駅は何ですか？', '츠기노 에키와 난데스카?', '다음 역은 어디인가요?'],
+    ['この電車は快速ですか？', '코노 덴샤와 카이소쿠 데스카?', '이 전철은 쾌속인가요?'],
+    ['普通電車はどれですか？', '후츠- 덴샤와 도레데스카?', '보통열차는 어느 것인가요?'],
+    ['ICOCAにチャージできますか？', '이코카니 차-지 데키마스카?', 'ICOCA를 충전할 수 있나요?'],
+    ['バスは前から乗りますか？', '바스와 마에카라 노리마스카?', '버스는 앞문으로 타나요?'],
+    ['降りる時に払いますか？', '오리루 토키니 하라이마스카?', '내릴 때 요금을 내나요?'],
+    ['この切符で大丈夫ですか？', '코노 킷푸데 다이조-부 데스카?', '이 표로 괜찮나요?'],
+    ['終電は何時ですか？', '슈-덴와 난지데스카?', '막차가 몇 시인가요?'],
+  ],
+  hotel: [
+    ['予約名は〇〇です。', '요야쿠메이와 ○○ 데스.', '예약자 이름은 ○○입니다.'],
+    ['パスポートはこちらです。', '파스포-토와 코치라 데스.', '여권 여기 있습니다.'],
+    ['部屋は何階ですか？', '헤야와 난가이 데스카?', '방은 몇 층인가요?'],
+    ['朝食は何時からですか？', '초-쇼쿠와 난지카라 데스카?', '아침 식사는 몇 시부터인가요?'],
+    ['チェックアウトは何時ですか？', '첵쿠아우토와 난지데스카?', '체크아웃은 몇 시인가요?'],
+    ['タオルをもう一枚お願いします。', '타오루오 모- 이치마이 오네가이시마스.', '수건 한 장 더 부탁합니다.'],
+    ['エアコンの使い方を教えてください。', '에아콘노 츠카이카타오 오시에테 쿠다사이.', '에어컨 사용법을 알려주세요.'],
+    ['充電器を借りられますか？', '주-덴키오 카리라레마스카?', '충전기를 빌릴 수 있나요?'],
+    ['大浴場は何時までですか？', '다이요쿠조-와 난지마데 데스카?', '대욕장은 몇 시까지인가요?'],
+  ],
+  shopping: [
+    ['これを見せてください。', '코레오 미세테 쿠다사이.', '이것 좀 보여주세요.'],
+    ['試着できますか？', '시챠쿠 데키마스카?', '입어봐도 되나요?'],
+    ['もう少し小さいサイズはありますか？', '모- 스코시 치이사이 사이즈와 아리마스카?', '조금 더 작은 사이즈가 있나요?'],
+    ['もう少し大きいサイズはありますか？', '모- 스코시 오-키이 사이즈와 아리마스카?', '조금 더 큰 사이즈가 있나요?'],
+    ['これの黒はありますか？', '코레노 쿠로와 아리마스카?', '이 제품 검은색 있나요?'],
+    ['レシートをください。', '레시-토오 쿠다사이.', '영수증 주세요.'],
+    ['このカードで払います。', '코노 카-도데 하라이마스.', '이 카드로 결제할게요.'],
+    ['現金で払います。', '겐킨데 하라이마스.', '현금으로 낼게요.'],
+    ['返品できますか？', '헨핀 데키마스카?', '반품할 수 있나요?'],
+    ['これは免税対象ですか？', '코레와 멘제이 타이쇼- 데스카?', '이건 면세 대상인가요?'],
+  ],
+  help: [
+    ['地図で見せてください。', '치즈데 미세테 쿠다사이.', '지도에서 보여주세요.'],
+    ['ここから歩いて何分ですか？', '코코카라 아루이테 난푼 데스카?', '여기서 걸어서 몇 분인가요?'],
+    ['右ですか、左ですか？', '미기데스카, 히다리데스카?', '오른쪽인가요, 왼쪽인가요?'],
+    ['近くにコンビニはありますか？', '치카쿠니 콘비니와 아리마스카?', '근처에 편의점이 있나요?'],
+    ['写真を撮っていただけますか？', '샤신오 톳테 이타다케마스카?', '사진을 찍어주실 수 있나요?'],
+  ],
+};
+
+const extraTripPhraseGroups = [
+  { id: 'airport' as const, title: '공항 · 입국', description: '입국심사 · 수하물 · HARUKA · 탑승구', icon: <Plane/>, items: [
+    ['国際線の出発口はどこですか？', '코쿠사이센노 슛파츠구치와 도코데스카?', '국제선 출발장은 어디인가요?'],
+    ['入国審査はどこですか？', '뉴-코쿠 신사와 도코데스카?', '입국심사는 어디인가요?'],
+    ['税関はどこですか？', '제이칸와 도코데스카?', '세관은 어디인가요?'],
+    ['荷物受取はどこですか？', '니모츠 우케토리와 도코데스카?', '수하물 찾는 곳은 어디인가요?'],
+    ['この列で合っていますか？', '코노 레츠데 앗테이마스카?', '이 줄이 맞나요?'],
+    ['関西空港駅はどこですか？', '칸사이 쿠-코-에키와 도코데스카?', '간사이공항역은 어디인가요?'],
+    ['HARUKAの切符売り場はどこですか？', '하루카노 킷푸 우리바와 도코데스카?', 'HARUKA 표 파는 곳은 어디인가요?'],
+    ['京都行きのHARUKAはどこから乗りますか？', '교토유키노 하루카와 도코카라 노리마스카?', '교토행 HARUKA는 어디서 타나요?'],
+    ['予約した切符を受け取りたいです。', '요야쿠시타 킷푸오 우케토리타이 데스.', '예약한 표를 수령하고 싶어요.'],
+    ['このQRコードを使えますか？', '코노 큐-아-루 코-도오 츠카에마스카?', '이 QR 코드를 사용할 수 있나요?'],
+    ['搭乗口は何番ですか？', '토-죠-구치와 난반 데스카?', '탑승구는 몇 번인가요?'],
+    ['何時までに搭乗口に行けばいいですか？', '난지마데니 토-죠-구치니 이케바 이이데스카?', '몇 시까지 탑승구에 가면 되나요?'],
+    ['預け荷物はありません。', '아즈케 니모츠와 아리마센.', '위탁수하물은 없습니다.'],
+  ] as PhraseTuple[] },
+  { id: 'convenience' as const, title: '편의점', description: '데우기 · 수저 · ATM · IC 충전', icon: <ShoppingBag/>, items: [
+    ['おにぎりはどこですか？', '오니기리와 도코데스카?', '주먹밥은 어디에 있나요?'],
+    ['電子レンジで温めてください。', '덴시렌지데 아타타메테 쿠다사이.', '전자레인지에 데워주세요.'],
+    ['温めなくて大丈夫です。', '아타타메나쿠테 다이조-부 데스.', '데우지 않아도 괜찮아요.'],
+    ['箸を二膳ください。', '하시오 니젠 쿠다사이.', '젓가락 두 벌 주세요.'],
+    ['スプーンをください。', '스푸-응오 쿠다사이.', '숟가락 주세요.'],
+    ['袋はいりません。', '후쿠로와 이리마센.', '봉투는 필요 없어요.'],
+    ['水はどこですか？', '미즈와 도코데스카?', '물은 어디에 있나요?'],
+    ['ATMはありますか？', '에이티에무와 아리마스카?', 'ATM이 있나요?'],
+    ['交通系ICカードにチャージできますか？', '코-츠-케이 아이시 카-도니 차-지 데키마스카?', '교통계 IC카드를 충전할 수 있나요?'],
+    ['ゴミ箱はどこですか？', '고미바코와 도코데스카?', '쓰레기통은 어디인가요?'],
+  ] as PhraseTuple[] },
+  { id: 'sightseeing' as const, title: '관광 · 사찰', description: '입장권 · 촬영 · 관람시간 · 코인락커', icon: <MapPin/>, items: [
+    ['チケットを二枚ください。', '치켓토오 니마이 쿠다사이.', '표 두 장 주세요.'],
+    ['当日券はありますか？', '토-지츠켄와 아리마스카?', '당일권이 있나요?'],
+    ['入場は何時までですか？', '뉴-죠-와 난지마데 데스카?', '입장은 몇 시까지인가요?'],
+    ['写真を撮ってもいいですか？', '샤신오 톳테모 이이데스카?', '사진을 찍어도 되나요?'],
+    ['ここは撮影禁止ですか？', '코코와 사츠에이 킨시 데스카?', '여기는 촬영 금지인가요?'],
+    ['御朱印はどこでいただけますか？', '고슈인와 도코데 이타다케마스카?', '고슈인은 어디서 받을 수 있나요?'],
+    ['お守りはどこですか？', '오마모리와 도코데스카?', '부적은 어디에 있나요?'],
+    ['この列は入場待ちですか？', '코노 레츠와 뉴-죠-마치 데스카?', '이 줄은 입장 대기줄인가요?'],
+    ['所要時間はどのくらいですか？', '쇼요-지칸와 도노쿠라이 데스카?', '관람에 얼마나 걸리나요?'],
+    ['再入場できますか？', '사이뉴-죠- 데키마스카?', '재입장할 수 있나요?'],
+    ['出口はどこですか？', '데구치와 도코데스카?', '출구는 어디인가요?'],
+    ['コインロッカーはありますか？', '코인 롯카-와 아리마스카?', '코인락커가 있나요?'],
+  ] as PhraseTuple[] },
+  { id: 'health' as const, title: '약국 · 몸상태', description: '두통 · 복통 · 물집 · 약 · 병원', icon: <Heart/>, items: [
+    ['頭が痛いです。', '아타마가 이타이 데스.', '머리가 아파요.'],
+    ['お腹が痛いです。', '오나카가 이타이 데스.', '배가 아파요.'],
+    ['熱があります。', '네츠가 아리마스.', '열이 있어요.'],
+    ['吐き気があります。', '하키케가 아리마스.', '메스꺼움이 있어요.'],
+    ['足が痛いです。', '아시가 이타이 데스.', '발/다리가 아파요.'],
+    ['靴ずれができました。', '쿠츠즈레가 데키마시타.', '신발 때문에 물집이 생겼어요.'],
+    ['風邪薬はありますか？', '카제구스리와 아리마스카?', '감기약이 있나요?'],
+    ['痛み止めはありますか？', '이타미도메와 아리마스카?', '진통제가 있나요?'],
+    ['絆創膏はありますか？', '반소-코-와 아리마스카?', '반창고가 있나요?'],
+    ['英語が話せる医師はいますか？', '에이고가 하나세루 이시와 이마스카?', '영어 가능한 의사가 있나요?'],
+    ['病院に行きたいです。', '뵤-인니 이키타이 데스.', '병원에 가고 싶어요.'],
+    ['この薬は一日何回ですか？', '코노 쿠스리와 이치니치 난카이 데스카?', '이 약은 하루에 몇 번 먹나요?'],
+  ] as PhraseTuple[] },
+  { id: 'emergency' as const, title: '분실 · 긴급', description: '경찰 · 구급차 · 여권 · 휴대폰 · 일행', icon: <AlertTriangle/>, items: [
+    ['助けてください。', '타스케테 쿠다사이.', '도와주세요.'],
+    ['警察を呼んでください。', '케이사츠오 욘데 쿠다사이.', '경찰을 불러주세요.'],
+    ['救急車を呼んでください。', '큐-큐-샤오 욘데 쿠다사이.', '구급차를 불러주세요.'],
+    ['財布をなくしました。', '사이후오 나쿠시마시타.', '지갑을 잃어버렸어요.'],
+    ['パスポートをなくしました。', '파스포-토오 나쿠시마시타.', '여권을 잃어버렸어요.'],
+    ['携帯電話をなくしました。', '케이타이 덴와오 나쿠시마시타.', '휴대폰을 잃어버렸어요.'],
+    ['道に迷いました。', '미치니 마요이마시타.', '길을 잃었어요.'],
+    ['友達とはぐれました。', '토모다치토 하구레마시타.', '일행과 떨어졌어요.'],
+    ['盗まれました。', '누스마레마시타.', '도난당했어요.'],
+    ['韓国大使館に連絡したいです。', '칸코쿠 타이시칸니 렌라쿠 시타이 데스.', '한국 대사관에 연락하고 싶어요.'],
+    ['ここは安全ですか？', '코코와 안젠 데스카?', '여기는 안전한가요?'],
+  ] as PhraseTuple[] },
+];
+
+const extendedTripPhraseGroups = [
+  ...tripPhraseGroups.map((group) => ({ ...group, items: [...group.items, ...(tripPhraseAdditions[group.id] || [])] as PhraseTuple[] })),
+  ...extraTripPhraseGroups,
+];
+
 function TripJapanesePanel() {
-  const validIds = useMemo(() => new Set<TripPhraseCategoryId>(['all', ...tripPhraseGroups.map((group) => group.id)]), []);
+  const validIds = useMemo(() => new Set<TripPhraseCategoryId>(['all', ...extendedTripPhraseGroups.map((group) => group.id)]), []);
   const stored = localStorage.getItem('mytrip-phrase-category') as TripPhraseCategoryId | null;
   const [category, setCategory] = useState<TripPhraseCategoryId>(stored && validIds.has(stored) ? stored : 'all');
   const [displayPhrase, setDisplayPhrase] = useState<[string, string, string] | null>(null);
   const [copied, setCopied] = useState(false);
+  const [query, setQuery] = useState('');
   const categoryNavRef = useRef<HTMLElement | null>(null);
-  const activeGroup = category === 'all' ? null : tripPhraseGroups.find((group) => group.id === category) || null;
-  const total = tripPhraseGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const activeGroup = category === 'all' ? null : extendedTripPhraseGroups.find((group) => group.id === category) || null;
+  const total = extendedTripPhraseGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const normalizedQuery = query.trim().toLowerCase();
+  const searchResults = normalizedQuery ? extendedTripPhraseGroups.flatMap((group) => group.items
+    .filter(([jp, sound, meaning]) => `${jp} ${sound} ${meaning} ${group.title}`.toLowerCase().includes(normalizedQuery))
+    .map((item) => ({ group, item }))).slice(0, 40) : [];
   useEffect(() => {
     const active = categoryNavRef.current?.querySelector<HTMLElement>(`[data-phrase-category="${category}"]`);
     active?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [category]);
   function selectCategory(next: TripPhraseCategoryId) {
     setCategory(next);
+    setQuery('');
     localStorage.setItem('mytrip-phrase-category', next);
   }
   function copyPhrase(jp: string) {
@@ -608,12 +816,16 @@ function TripJapanesePanel() {
   return <div className="trip-tool-page japanese-tool-page">
     <div className="trip-tool-intro"><div><p className="eyebrow">USEFUL JAPANESE</p><h2>일본어 표현</h2><p>상황을 고른 뒤 문장을 누르면 직원에게 보여주기 좋은 큰 화면으로 열립니다. 큰 화면에서 복사도 할 수 있습니다.</p></div><b>{total} phrases</b></div>
     <nav className="phrase-category-nav" aria-label="일본어 표현 상황 선택" ref={categoryNavRef}>
-      <button data-phrase-category="all" className={category === 'all' ? 'active' : ''} onClick={() => selectCategory('all')}><Sparkles size={14}/><span>전체</span><b>{tripPhraseGroups.length}</b></button>
-      {tripPhraseGroups.map((group) => <button key={group.id} data-phrase-category={group.id} className={category === group.id ? 'active' : ''} onClick={() => selectCategory(group.id)}>{group.icon}<span>{group.title}</span><b>{group.items.length}</b></button>)}
+      <button data-phrase-category="all" className={category === 'all' ? 'active' : ''} onClick={() => selectCategory('all')}><Sparkles size={14}/><span>전체</span><b>{extendedTripPhraseGroups.length}</b></button>
+      {extendedTripPhraseGroups.map((group) => <button key={group.id} data-phrase-category={group.id} className={category === group.id ? 'active' : ''} onClick={() => selectCategory(group.id)}>{group.icon}<span>{group.title}</span><b>{group.items.length}</b></button>)}
     </nav>
-    {category === 'all' ? <section className="phrase-overview" aria-label="일본어 상황별 전체보기">
-      <div className="phrase-overview-head"><div><p className="eyebrow">CHOOSE A SITUATION</p><h3>지금 필요한 상황을 선택</h3></div><span>39문장을 한 번에 펼치지 않습니다.</span></div>
-      <div className="phrase-overview-grid">{tripPhraseGroups.map((group) => {
+    <label className="phrase-search"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="예: 화장실, 와사비, HARUKA, 카드, 병원" aria-label="일본어 표현 검색"/>{query && <button onClick={() => setQuery('')} aria-label="검색 지우기"><X size={15}/></button>}</label>
+    {normalizedQuery ? <section className="phrase-search-results" aria-label="일본어 표현 검색 결과">
+      <div className="phrase-overview-head"><div><p className="eyebrow">SEARCH</p><h3>“{query.trim()}” 검색 결과</h3></div><span>{searchResults.length}개 표시</span></div>
+      {searchResults.length ? <div className="phrase-detail-list">{searchResults.map(({ group, item: [jp, sound, meaning] }, index) => <button key={`${group.id}-${jp}`} className="phrase-detail-card" onClick={() => setDisplayPhrase([jp, sound, meaning])}><span className="phrase-number">{String(index + 1).padStart(2, '0')}</span><div><em className="phrase-source-tag">{group.title}</em><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small></div><Maximize2 size={16}/></button>)}</div> : <div className="phrase-empty-search">검색 결과가 없습니다. 한국어 뜻, 일본어, 발음, 상황 이름으로 검색할 수 있습니다.</div>}
+    </section> : category === 'all' ? <section className="phrase-overview" aria-label="일본어 상황별 전체보기">
+      <div className="phrase-overview-head"><div><p className="eyebrow">CHOOSE A SITUATION</p><h3>지금 필요한 상황을 선택</h3></div><span>{total}문장을 한 번에 펼치지 않습니다.</span></div>
+      <div className="phrase-overview-grid">{extendedTripPhraseGroups.map((group) => {
         const preview = group.items[0];
         return <button key={group.id} className="phrase-overview-card" onClick={() => selectCategory(group.id)}><header><span>{group.icon}</span><div><strong>{group.title}</strong><small>{group.items.length}개 표현</small></div><ChevronRight size={18}/></header><p>{group.description}</p><div className="phrase-preview"><strong lang="ja">{preview[0]}</strong><span>{preview[2]}</span></div></button>;
       })}</div>
@@ -759,7 +971,7 @@ function EventVisual({ event, mapUrl }: { event: TripEvent; mapUrl?: string | nu
     : <div className="event-visual">{content}</div>;
 }
 
-function TripFieldMapPanel({ trip }: { trip: Trip }) {
+function TripFieldMapPanel({ trip, online }: { trip: Trip; online: boolean }) {
   const today = todayInTimeZone('Asia/Tokyo');
   const active = today >= trip.start_date && today <= trip.end_date;
   const focusDate = active ? today : trip.start_date;
@@ -796,7 +1008,7 @@ function TripFieldMapPanel({ trip }: { trip: Trip }) {
     </section>
     <div className="trip-map-layout">
       <div className="trip-map-stage">
-        <TripMap trip={mapTrip} numbered />
+        {online ? <TripMap trip={mapTrip} numbered /> : <OfflineRouteMap events={visibleEvents} />}
         {next && <div className="trip-map-focus-card"><span>{current ? 'NOW' : 'NEXT'} · {next.start_time || '시간 미정'}</span><strong>{next.title}</strong>{next.location && <small>{next.location}</small>}{googleMapsEventUrl(next) && <a href={googleMapsEventUrl(next)!} target="_blank" rel="noreferrer"><Navigation size={13}/>Google Maps로 이동</a>}</div>}
       </div>
       <aside className="trip-map-stop-panel">
@@ -836,6 +1048,32 @@ function DiscoverPanel({ trip, plannerName, reload }: { trip: Trip; plannerName:
       {aiMessage && <p className="ai-message">{aiMessage}</p>}
       <div className="idea-list">{ideas.map((idea, i) => <article key={`${idea.name}-${i}`}><div className="idea-top"><span>{idea.category}</span><small>{idea.area}</small></div><h3>{idea.name}</h3><p>{idea.reason}</p><div><span>추천 시간 · {idea.bestTime}</span><button onClick={() => save(idea)}><Plus size={14}/> 후보 저장</button></div></article>)}</div>
     </aside>
+  </div>;
+}
+
+function OfflineRouteMap({ events }: { events: TripEvent[] }) {
+  const points = events.filter((event) => Number.isFinite(event.lat) && Number.isFinite(event.lng)).map((event, index) => ({
+    event,
+    index: index + 1,
+    lat: Number(event.lat),
+    lng: Number(event.lng),
+  }));
+  if (!points.length) return <div className="offline-route-map empty"><WifiOff size={22}/><strong>오프라인 좌표 없음</strong><span>일정 목록과 주소는 저장되어 있습니다.</span></div>;
+  const minLat = Math.min(...points.map((point) => point.lat));
+  const maxLat = Math.max(...points.map((point) => point.lat));
+  const minLng = Math.min(...points.map((point) => point.lng));
+  const maxLng = Math.max(...points.map((point) => point.lng));
+  const latSpan = Math.max(.01, maxLat - minLat);
+  const lngSpan = Math.max(.01, maxLng - minLng);
+  const projected = points.map((point) => ({ ...point, x: 10 + ((point.lng - minLng) / lngSpan) * 80, y: 90 - ((point.lat - minLat) / latSpan) * 80 }));
+  const polyline = projected.map((point) => `${point.x},${point.y}`).join(' ');
+  return <div className="offline-route-map">
+    <div className="offline-map-badge"><WifiOff size={13}/><span>OFFLINE ROUTE</span></div>
+    <svg viewBox="0 0 100 100" role="img" aria-label="저장된 일정 좌표를 이용한 오프라인 동선 지도">
+      {projected.length > 1 && <polyline points={polyline} fill="none" vectorEffect="non-scaling-stroke"/>}
+      {projected.map((point) => <g key={point.event.id} transform={`translate(${point.x} ${point.y})`}><circle r="4.7"/><text textAnchor="middle" dominantBaseline="central">{point.index}</text></g>)}
+    </svg>
+    <div className="offline-map-note"><strong>{points.length}개 저장 좌표</strong><span>배경지도 없이 순서와 상대 위치만 표시합니다. 실제 길찾기는 연결 후 Google Maps를 사용하세요.</span></div>
   </div>;
 }
 
@@ -1196,6 +1434,7 @@ function assistantActionDescription(action:AssistantAction,trip:Trip){if(action.
 function formatDay(date:string){return new Intl.DateTimeFormat('ko-KR',{month:'numeric',day:'numeric',weekday:'short',timeZone:'UTC'}).format(new Date(plainDateUtc(date)));}
 function formatMonthDay(date:string){const [,month,day]=date.split('-').map(Number);return `${month}/${day}`;}
 function formatDateRange(start:string,end:string){const [year,month,day]=start.split('-').map(Number),[,endMonth,endDay]=end.split('-').map(Number);return `${year}. ${month}. ${day} — ${endMonth}. ${endDay}`;}
+function formatBytes(value:number){if(value<1024)return`${value} B`;if(value<1024*1024)return`${(value/1024).toFixed(1)} KB`;return`${(value/1024/1024).toFixed(1)} MB`;}
 function todayInTimeZone(timeZone:string){const parts=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone}).formatToParts(new Date());const get=(type:string)=>parts.find((part)=>part.type===type)?.value;return `${get('year')}-${get('month')}-${get('day')}`;}
 function timeInTimeZone(timeZone:string){return new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone}).format(new Date());}
 function compareDayEvents(a:TripEvent,b:TripEvent,events:TripEvent[]){const aKey=dayEventSortKey(a,events),bKey=dayEventSortKey(b,events);return aKey.localeCompare(bKey)||Number(a.sort_order||0)-Number(b.sort_order||0);}

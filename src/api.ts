@@ -7,8 +7,20 @@ export type PendingMutation = {
 };
 
 const DB_NAME = 'mytrip-offline';
-const STORE = 'mutations';
+const MUTATION_STORE = 'mutations';
+const SNAPSHOT_STORE = 'snapshots';
+const PACK_CACHE = 'mytrip-offline-pack-v1';
 const SYNC_EVENT = 'mytrip:sync-state';
+
+export type OfflineSnapshot<T> = { key: string; value: T; updated_at: number };
+export type OfflinePackInfo = {
+  saved_at: number;
+  asset_count: number;
+  map_tile_count: number;
+  weather_saved: boolean;
+  storage_bytes: number | null;
+  persisted: boolean;
+};
 
 function mutationId() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -16,20 +28,21 @@ function mutationId() {
 
 function openQueueDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, 2);
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: 'id' });
+      if (!request.result.objectStoreNames.contains(MUTATION_STORE)) request.result.createObjectStore(MUTATION_STORE, { keyPath: 'id' });
+      if (!request.result.objectStoreNames.contains(SNAPSHOT_STORE)) request.result.createObjectStore(SNAPSHOT_STORE, { keyPath: 'key' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
 
-async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function withStore<T>(storeName: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await openQueueDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, mode);
-    const request = run(tx.objectStore(STORE));
+    const tx = db.transaction(storeName, mode);
+    const request = run(tx.objectStore(storeName));
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
     tx.oncomplete = () => db.close();
@@ -39,7 +52,7 @@ async function withStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStor
 
 async function listPending(): Promise<PendingMutation[]> {
   if (!('indexedDB' in globalThis)) return [];
-  const rows = await withStore<PendingMutation[]>('readonly', (store) => store.getAll());
+  const rows = await withStore<PendingMutation[]>(MUTATION_STORE, 'readonly', (store) => store.getAll());
   return rows.sort((a, b) => a.created_at - b.created_at);
 }
 
@@ -49,13 +62,103 @@ async function queueMutation(path: string, body: unknown) {
   const mergedBody = { ...previousBody, ...((body || {}) as Record<string, unknown>) };
   for (const item of existing) await removeMutation(item.id);
   const pending: PendingMutation = { id: mutationId(), path, method: 'PATCH', body: mergedBody, created_at: Date.now() };
-  await withStore('readwrite', (store) => store.put(pending));
+  await withStore(MUTATION_STORE, 'readwrite', (store) => store.put(pending));
   emitSyncState({ mutation: pending });
   return pending;
 }
 
 async function removeMutation(id: string) {
-  await withStore('readwrite', (store) => store.delete(id));
+  await withStore(MUTATION_STORE, 'readwrite', (store) => store.delete(id));
+}
+
+export async function readOfflineSnapshot<T>(key: string): Promise<OfflineSnapshot<T> | null> {
+  if (!('indexedDB' in globalThis)) return null;
+  return (await withStore<OfflineSnapshot<T> | undefined>(SNAPSHOT_STORE, 'readonly', (store) => store.get(key))) || null;
+}
+
+export async function writeOfflineSnapshot<T>(key: string, value: T): Promise<OfflineSnapshot<T>> {
+  const snapshot: OfflineSnapshot<T> = { key, value, updated_at: Date.now() };
+  await withStore(SNAPSHOT_STORE, 'readwrite', (store) => store.put(snapshot));
+  return snapshot;
+}
+
+export const readTripSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`trip:${tripId}`);
+export const writeTripSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`trip:${tripId}`, value);
+export const readWeatherSnapshot = <T>(tripId: string) => readOfflineSnapshot<T>(`weather:${tripId}`);
+export const writeWeatherSnapshot = <T>(tripId: string, value: T) => writeOfflineSnapshot(`weather:${tripId}`, value);
+export const readOfflinePackInfo = (tripId: string) => readOfflineSnapshot<OfflinePackInfo>(`pack:${tripId}`);
+
+async function cacheResources(cacheName: string, urls: string[]) {
+  const cache = await caches.open(cacheName);
+  let saved = 0;
+  let bytes = 0;
+  const queue = [...urls];
+  const workers = Array.from({ length: Math.min(6, queue.length || 1) }, async () => {
+    while (queue.length) {
+      const url = queue.shift();
+      if (!url) return;
+      try {
+        const response = await fetch(url, { cache: 'no-cache' });
+        if (response.ok) {
+          const copy = response.clone();
+          await cache.put(url, response.clone());
+          bytes += (await copy.arrayBuffer()).byteLength;
+          saved += 1;
+        }
+      } catch {
+        // Partial packs are still useful; status reports exactly how many resources succeeded.
+      }
+    }
+  });
+  await Promise.all(workers);
+  return { saved, bytes };
+}
+
+async function pruneCache(cacheName: string, urls: string[]) {
+  const cache = await caches.open(cacheName);
+  const keep = new Set(urls.map((url) => new URL(url, location.href).href));
+  const keys = await cache.keys();
+  await Promise.all(keys.filter((request) => !keep.has(request.url)).map((request) => cache.delete(request)));
+}
+
+export async function prepareOfflinePack(input: {
+  tripId: string;
+  trip: Record<string, any>;
+  weather: unknown;
+  weatherHours: unknown;
+}): Promise<OfflinePackInfo> {
+  if (!navigator.onLine) throw new Error('오프라인 저장은 인터넷에 연결된 상태에서 갱신할 수 있습니다.');
+  await writeTripSnapshot(input.tripId, input.trip);
+  const weatherSaved = Array.isArray(input.weather) && input.weather.length > 0;
+  if (weatherSaved) await writeWeatherSnapshot(input.tripId, { daily: input.weather, hourly: input.weatherHours });
+
+  const resourceUrls = new Set<string>(['/', '/index.html', location.pathname, '/manifest.webmanifest', '/icon.svg']);
+  document.querySelectorAll<HTMLScriptElement>('script[src]').forEach((node) => resourceUrls.add(node.src));
+  document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"][href]').forEach((node) => resourceUrls.add(node.href));
+  performance.getEntriesByType('resource').forEach((entry) => {
+    try {
+      const url = new URL(entry.name);
+      if (url.origin === location.origin && url.pathname.startsWith('/assets/')) resourceUrls.add(url.href);
+    } catch {
+      // Ignore non-URL performance entries.
+    }
+  });
+  const resources = [...resourceUrls];
+  const assets = await cacheResources(PACK_CACHE, resources);
+  await pruneCache(PACK_CACHE, resources);
+  const snapshotBytes = new Blob([JSON.stringify(input.trip), JSON.stringify(input.weather), JSON.stringify(input.weatherHours)]).size;
+  let persisted = false;
+  try { persisted = Boolean(await navigator.storage?.persist?.()); } catch { persisted = false; }
+  const info: OfflinePackInfo = {
+    saved_at: Date.now(),
+    asset_count: assets.saved,
+    map_tile_count: 0,
+    weather_saved: weatherSaved,
+    storage_bytes: assets.bytes + snapshotBytes,
+    persisted,
+  };
+  await writeOfflineSnapshot(`pack:${input.tripId}`, info);
+  return info;
 }
 
 async function emitSyncState(extra: Record<string, unknown> = {}) {
@@ -98,7 +201,7 @@ export async function pendingMutationCount() {
   return (await listPending()).length;
 }
 
-export function subscribeSyncState(listener: (detail: { pending: number; online: boolean; failed?: boolean; mutation?: PendingMutation }) => void) {
+export function subscribeSyncState(listener: (detail: { pending: number; online: boolean; failed?: boolean; flushed?: number; mutation?: PendingMutation }) => void) {
   const handler = (event: Event) => listener((event as CustomEvent).detail);
   window.addEventListener(SYNC_EVENT, handler);
   return () => window.removeEventListener(SYNC_EVENT, handler);
@@ -119,7 +222,7 @@ export async function flushQueuedMutations() {
       break;
     }
   }
-  await emitSyncState({ failed: failed > 0 });
+  await emitSyncState({ failed: failed > 0, flushed });
   return { flushed, failed };
 }
 

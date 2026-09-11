@@ -1,4 +1,5 @@
-const CACHE = 'mytrip-2026-v4';
+const CACHE = 'mytrip-2026-v6';
+const PACK_CACHE = 'mytrip-offline-pack-v1';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -6,9 +7,10 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  const keep = new Set([CACHE, PACK_CACHE]);
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => !keep.has(key)).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
@@ -23,15 +25,15 @@ async function networkFirst(request, timeoutMs = 4000) {
     if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    const cached = await cache.match(request);
+    const cached = await caches.match(request);
     if (cached) return cached;
     throw new Error('offline');
   }
 }
 
-async function cacheFirst(request) {
-  const cache = await caches.open(CACHE);
-  const cached = await cache.match(request);
+async function cacheFirst(request, cacheName = CACHE) {
+  const cache = await caches.open(cacheName);
+  const cached = await caches.match(request);
   if (cached) return cached;
   const response = await fetch(request);
   if (response.ok || response.type === 'opaque') await cache.put(request, response.clone());
@@ -42,16 +44,10 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  const mapTile = /(^|\.)tile\.openstreetmap\.org$/.test(url.hostname);
-  if (url.origin !== self.location.origin && !mapTile) return;
-
-  if (mapTile) {
-    event.respondWith(cacheFirst(request));
-    return;
-  }
+  if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request).catch(() => caches.match('/index.html')));
+    event.respondWith(cacheFirst(request).catch(() => caches.match('/index.html')));
     return;
   }
 
