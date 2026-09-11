@@ -16,6 +16,24 @@ CREATE TABLE IF NOT EXISTS trip_checklist_items (
 
 CREATE INDEX IF NOT EXISTS idx_trip_checklist_trip ON trip_checklist_items(trip_id, sort_order);
 
+CREATE TABLE IF NOT EXISTS trip_budget_entries (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+  entry_type TEXT NOT NULL DEFAULT 'EXPENSE',
+  amount_jpy INTEGER NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'Travel Wallet',
+  category TEXT,
+  merchant TEXT,
+  occurred_on TEXT NOT NULL,
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_trip_budget_entries_trip ON trip_budget_entries(trip_id, occurred_on, created_at);
+CREATE INDEX IF NOT EXISTS idx_trip_budget_entries_participant ON trip_budget_entries(participant_id, occurred_on, created_at);
+
 CREATE TABLE IF NOT EXISTS restaurants (
   id TEXT PRIMARY KEY,
   trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -177,7 +195,7 @@ VALUES
 ('plan-task-esim-buy', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '두 사람 eSIM 구매', '통신', 'TODO', '구매 예정: Stellar eSIM Japan 5GB / 20일 / US$1.75 × 2. 무료 백업: Eskimo 제휴 1GB(만료 없음), Nomad Trial 1GB/3일', 'https://esimdb.com/japan/stellar', 20),
 ('plan-task-esim-install', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'eSIM 프로필 한국에서 설치', '통신', 'TODO', 'Wi-Fi에서 설치하고 QR/설정 화면을 오프라인 캡처. 일본 도착 전 데이터 회선 활성화 조건 확인', NULL, 21),
 ('plan-task-vjw', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), 'Visit Japan Web 등록 + QR 캡처', '예약 · 입국', 'TODO', 'Oosu와 Domenic 각각 입국·세관 정보를 등록하고 QR을 오프라인 저장', 'https://www.vjw.digital.go.jp/', 30),
-('plan-task-insurance', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '여행자보험 확인/가입', '예약 · 입국', 'TODO', '신용카드 해외 의료 보장과 중복 여부를 먼저 확인', 'https://www.japan.travel/en/plan/travel-insurance-in-japan/', 40),
+('plan-task-insurance', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '여행자보험 가입 완료', '예약 · 입국', 'DONE', '우수 · KB손해보험 다이렉트 / 도미닉 · 삼성화재 다이렉트 가입 완료', 'https://www.japan.travel/en/plan/travel-insurance-in-japan/', 40),
 ('plan-task-restaurants', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '식사 후보 선택 + 필요한 식당 예약', '식당 예약', 'TODO', '식사별 후보에서 식당을 선택하고, 선택한 식당이 예약 권장인 경우 BOOKED로 변경', NULL, 50),
 ('plan-task-plug', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '일본 Type-A 돼지코 2개 이상', '준비물', 'TODO', '충전기 입력이 100–240V인지 확인. 일본은 100V', NULL, 60),
 ('plan-task-rain', (SELECT id FROM trips WHERE title='Kyoto · Osaka 2026' LIMIT 1), '접이식 우산 + 얇은 방수 겉옷', '준비물', 'TODO', '비를 기본 전제로 하되 덥고 습한 9월이라 가벼운 장비 우선', NULL, 61),
@@ -190,6 +208,16 @@ ON CONFLICT(id) DO UPDATE SET
   trip_id=excluded.trip_id, title=excluded.title, category=excluded.category,
   notes=excluded.notes, url=excluded.url, sort_order=excluded.sort_order,
   updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO trip_budget_entries (id, trip_id, participant_id, entry_type, amount_jpy, payment_method, category, merchant, occurred_on, notes, source)
+SELECT 'budget-oosu-travelwallet-initial', t.id, p.id, 'BUDGET', 20000, 'Travel Wallet', '환전 · 충전', 'Travel Wallet 초기 환전', '2026-09-11', '출국 전 ¥20,000 환전 완료', 'user-2026-09-11'
+FROM trips t JOIN participants p ON p.trip_id=t.id WHERE t.title='Kyoto · Osaka 2026' AND p.name='Oosu'
+ON CONFLICT(id) DO UPDATE SET amount_jpy=excluded.amount_jpy, payment_method=excluded.payment_method, notes=excluded.notes, updated_at=CURRENT_TIMESTAMP;
+
+INSERT INTO trip_budget_entries (id, trip_id, participant_id, entry_type, amount_jpy, payment_method, category, merchant, occurred_on, notes, source)
+SELECT 'budget-domenic-travelwallet-initial', t.id, p.id, 'BUDGET', 20000, 'Travel Wallet', '환전 · 충전', 'Travel Wallet 초기 환전', '2026-09-11', '출국 전 ¥20,000 환전 완료', 'user-2026-09-11'
+FROM trips t JOIN participants p ON p.trip_id=t.id WHERE t.title='Kyoto · Osaka 2026' AND p.name='Domenic'
+ON CONFLICT(id) DO UPDATE SET amount_jpy=excluded.amount_jpy, payment_method=excluded.payment_method, notes=excluded.notes, updated_at=CURRENT_TIMESTAMP;
 
 -- Restaurants. Re-running preserves reservation_status so BOOKED remains BOOKED.
 INSERT INTO restaurants (

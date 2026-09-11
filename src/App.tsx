@@ -3,8 +3,8 @@ import { DndContext, DragEndEvent, PointerSensor, useDraggable, useDroppable, us
 import { io } from 'socket.io-client';
 import {
   ArrowLeft, BedDouble, CalendarDays, Check, ChevronRight, CloudRain, Compass, Copy, ExternalLink, GripVertical,
-  ClipboardCheck, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
-  AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, WifiOff, X,
+  ClipboardCheck, CreditCard, Heart, Hotel, Import, Luggage, Map, MapPin, MessageCircle, MoreHorizontal, Navigation, Plane,
+  AlertTriangle, Download, FastForward, Maximize2, Menu, PanelLeftClose, PanelLeftOpen, Plus, Printer, Receipt, RefreshCw, Route, Search, Send, ShoppingBag, Sparkles, Trash2, Users, Utensils, Vote, Wallet, WifiOff, X,
 } from 'lucide-react';
 import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, clearOfflineTripData, del, flushQueuedMutations, patch, pendingMutationCount, post, prepareOfflinePack, readOfflinePackInfo, readTripRevision, readTripSnapshot, readWeatherSnapshot, subscribeSyncState, writeTripRevision, writeTripSnapshot, writeWeatherSnapshot } from './api';
 import type { OfflinePackInfo } from './api';
@@ -91,7 +91,7 @@ function HomePage() {
 }
 
 type WorkspaceMode = 'plan' | 'trip';
-type Tab = 'today' | 'trip-weather' | 'phrases' | 'shopping-guide' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
+type Tab = 'today' | 'trip-weather' | 'phrases' | 'shopping-guide' | 'budget' | 'guide' | 'schedule' | 'map' | 'votes' | 'packing' | 'inbox';
 type TripPhraseCategoryId = 'all' | 'restaurant' | 'diet' | 'transport' | 'hotel' | 'shopping' | 'help' | 'airport' | 'convenience' | 'sightseeing' | 'health' | 'emergency';
 type TripEventStatus = 'PLANNED' | 'DONE' | 'SKIPPED' | 'CANCELLED';
 type TripLiveGroup = { id: string; title: string; events: TripEvent[] };
@@ -261,6 +261,7 @@ function TripPage({ tripId }: { tripId: string }) {
         <nav>
           {workspaceMode === 'plan' ? <>
             <NavButton active={tab === 'guide'} icon={<ClipboardCheck />} label="준비 · 예약" onClick={() => selectTab('guide')} />
+            <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
             <NavButton active={tab === 'schedule'} icon={<CalendarDays />} label="일정 편집" onClick={() => selectTab('schedule')} />
             <NavButton active={tab === 'votes'} icon={<Vote />} label="후보 · 결정" onClick={() => selectTab('votes')} count={trip.places.length} />
             <NavButton active={tab === 'map'} icon={<Compass />} label="지도 · 리서치" onClick={() => selectTab('map')} />
@@ -272,6 +273,7 @@ function TripPage({ tripId }: { tripId: string }) {
             <NavButton active={tab === 'trip-weather'} icon={<CloudRain />} label="날씨 · 오늘의 코디" onClick={() => selectTab('trip-weather')} />
             <NavButton active={tab === 'phrases'} icon={<MessageCircle />} label="일본어 표현" onClick={() => selectTab('phrases')} />
             <NavButton active={tab === 'shopping-guide'} icon={<ShoppingBag />} label="쇼핑 리스트" onClick={() => selectTab('shopping-guide')} />
+            <NavButton active={tab === 'budget'} icon={<Wallet />} label="예산 · 지출" onClick={() => selectTab('budget')} />
             <NavButton active={tab === 'map'} icon={<MapPin />} label="지도" onClick={() => selectTab('map')} />
           </>}
         </nav>
@@ -292,6 +294,7 @@ function TripPage({ tripId }: { tripId: string }) {
           {workspaceMode === 'trip' && tab === 'trip-weather' && <TripWeatherOutfitPanel trip={trip} weather={weather} />}
           {workspaceMode === 'trip' && tab === 'phrases' && <TripJapanesePanel />}
           {workspaceMode === 'trip' && tab === 'shopping-guide' && <TripShoppingGuidePanel trip={trip} />}
+          {tab === 'budget' && <BudgetLedgerPanel trip={trip} reload={reload} />}
           {workspaceMode === 'plan' && tab === 'guide' && <TripGuidePanel trip={trip} reload={reload} />}
           {tab === 'schedule' && <ScheduleBoard trip={trip} weather={weather} reload={reload} tripMode={workspaceMode === 'trip'} />}
           {tab === 'map' && (workspaceMode === 'trip' ? <TripFieldMapPanel trip={trip} online={syncState.online} /> : <DiscoverPanel trip={trip} plannerName={plannerName} reload={reload} />)}
@@ -402,6 +405,7 @@ function ModeSwitcher({ mode, onSelect }: { mode: WorkspaceMode; onSelect: (mode
 function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void }) {
   const items: Array<[Tab, React.ReactNode, string, number?]> = mode === 'plan' ? [
     ['guide', <ClipboardCheck/>, '준비 · 예약'],
+    ['budget', <Wallet/>, '예산 · 지출'],
     ['schedule', <CalendarDays/>, '일정 편집'],
     ['votes', <Vote/>, '후보 · 결정', trip.places.length],
     ['map', <Compass/>, '지도 · 리서치'],
@@ -413,6 +417,7 @@ function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelect
     ['trip-weather', <CloudRain/>, '날씨 · 오늘의 코디'],
     ['phrases', <MessageCircle/>, '일본어 표현'],
     ['shopping-guide', <ShoppingBag/>, '쇼핑 리스트'],
+    ['budget', <Wallet/>, '예산 · 지출'],
     ['map', <MapPin/>, '지도'],
   ];
   return <div className="mobile-menu-backdrop" onMouseDown={onClose}>
@@ -595,6 +600,7 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
         <button onClick={() => onOpenTab('schedule')}><CalendarDays size={15}/><span>전체 일정</span></button>
         <button onClick={() => onOpenTab('trip-weather')}><CloudRain size={15}/><span>날씨 · 코디</span></button>
         <button onClick={() => openPhraseCategory('all')}><MessageCircle size={15}/><span>일본어 표현</span></button>
+        <button onClick={() => onOpenTab('budget')}><Wallet size={15}/><span>지출 기록</span></button>
         {hotelMapUrl ? <a href={hotelMapUrl} target="_blank" rel="noreferrer"><BedDouble size={15}/><span>숙소로 이동</span></a> : <button onClick={() => onOpenTab('map')}><MapPin size={15}/><span>지도</span></button>}
       </div>
     </section>
@@ -678,6 +684,144 @@ function TripShoppingGuidePanel({ trip }: { trip: Trip }) {
     <section className="trip-tool-intro shopping-guide-hero"><div><p className="eyebrow">OSAKA FOOD SHOPPING</p><h2>편의점은 바로 먹고, 드럭스토어에서는 싸게 챙겨오기.</h2><p>애니 굿즈는 일정만 유지하고 추천 리스트에서는 제외했습니다. FamilyMart에서는 푸딩·산도 같은 냉장 간식을 그날 먹고, KitKat·Pocky 같은 상온 과자는 마지막 밤 드럭스토어에서 가격을 비교해 사는 흐름입니다.</p></div><div className="shopping-progress"><strong>{bought.size}/{tripShoppingItems.length}</strong><span>구매 체크</span></div></section>
     <section className="shopping-route-section"><div className="trip-section-heading"><div><Route/><span><p className="eyebrow">IN THE ITINERARY</p><h3>실제 일정에 넣은 쇼핑</h3></span></div><b>9/15–16 · Osaka</b></div><div className="shopping-route-list">{shoppingEvents.map((event) => <article key={event.id}><span>{formatMonthDay(event.date)} · {event.start_time || '--:--'}</span><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}{googleMapsEventUrl(event) && <a href={googleMapsEventUrl(event)!} target="_blank" rel="noreferrer"><MapPin size={12}/>지도</a>}</article>)}</div></section>
     <section className="shopping-list-section"><div className="trip-section-heading"><div><ShoppingBag/><span><p className="eyebrow">FOOD BUY LIST</p><h3>현지에서 먹기 · 싸게 사오기</h3></span></div><b>{tripShoppingItems.length}개 추천</b></div><div className="shopping-category-list">{Object.entries(shoppingGroups).map(([category, items]) => <section className="shopping-category-group" key={category}><header><h4>{category}</h4><span>{items.length}개</span></header><div className="shopping-item-grid">{items.map((item) => <article key={item.id} className={bought.has(item.id) ? 'bought' : ''}><ShoppingItemPhoto item={item}/><div className="shopping-item-copy"><span>{item.category}</span><h4>{item.name}</h4><strong>{item.price}</strong><p>{item.buy}</p><small>{item.note}</small><footer><button onClick={() => toggleBought(item.id)}><Check size={13}/>{bought.has(item.id) ? '구매 완료' : '먹음 · 구매함'}</button><a href={item.source} target="_blank" rel="noreferrer"><ExternalLink size={12}/>제품 보기</a></footer></div></article>)}</div></section>)}</div><p className="shopping-price-note">편의점 가격은 FamilyMart 공식 현재가를 우선 적었습니다. 드럭스토어 과자는 매장별 세일 폭이 커서 목표 범위로 보고, 같은 상온 과자라면 편의점보다 Matsumoto Kiyoshi 같은 드럭스토어/마트 가격을 먼저 비교하세요.</p></section>
+  </div>;
+}
+
+const budgetPaymentMethods = ['Travel Wallet', '신용카드', 'Toss', 'KakaoPay', '현금', '기타'];
+const budgetExpenseCategories = ['식비', '교통', '쇼핑', '관광', '편의점 · 간식', '숙소', '기타'];
+
+function yen(value: number) {
+  return `¥${Math.round(value || 0).toLocaleString('en-US')}`;
+}
+
+function budgetTravelerName(name: string) {
+  if (name === 'Oosu') return '우수 · Oosu';
+  if (name === 'Domenic') return '도미닉 · Domenic';
+  return name;
+}
+
+function BudgetLedgerPanel({ trip, reload }: { trip: Trip; reload: () => void }) {
+  const today = todayInTimeZone('Asia/Tokyo');
+  const defaultDate = today >= trip.start_date && today <= trip.end_date ? today : trip.start_date;
+  const formRef = useRef<HTMLElement | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    entry_type: 'EXPENSE' as 'BUDGET' | 'EXPENSE',
+    participant_id: trip.participants[0]?.id || '',
+    amount_jpy: '',
+    payment_method: 'Travel Wallet',
+    category: '식비',
+    merchant: '',
+    occurred_on: defaultDate,
+    notes: '',
+  });
+  const entries = trip.budget_entries || [];
+  const totalBudget = entries.filter((entry) => entry.entry_type === 'BUDGET').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+  const totalSpent = entries.filter((entry) => entry.entry_type === 'EXPENSE').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+  const totalRemaining = totalBudget - totalSpent;
+
+  function openEntry(participantId: string, type: 'BUDGET' | 'EXPENSE') {
+    setForm((current) => ({
+      ...current,
+      participant_id: participantId,
+      entry_type: type,
+      payment_method: type === 'BUDGET' ? 'Travel Wallet' : current.payment_method,
+      category: type === 'BUDGET' ? '환전 · 충전' : (budgetExpenseCategories.includes(current.category) ? current.category : '식비'),
+      merchant: type === 'BUDGET' ? 'Travel Wallet 추가 환전' : '',
+      amount_jpy: '',
+      notes: '',
+    }));
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  async function addEntry() {
+    const amount = Number(form.amount_jpy);
+    if (!form.participant_id || !Number.isFinite(amount) || amount <= 0 || saving) return;
+    setSaving(true);
+    try {
+      await post(`/api/trips/${trip.id}/budget/entries`, {
+        id: globalThis.crypto?.randomUUID?.() || `budget-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        participant_id: form.participant_id,
+        entry_type: form.entry_type,
+        amount_jpy: Math.round(amount),
+        payment_method: form.payment_method,
+        category: form.entry_type === 'BUDGET' ? '환전 · 충전' : form.category,
+        merchant: form.merchant.trim() || (form.entry_type === 'BUDGET' ? `${form.payment_method} 예산 추가` : null),
+        occurred_on: form.occurred_on,
+        notes: form.notes.trim() || null,
+      });
+      setForm((current) => ({ ...current, amount_jpy: '', merchant: current.entry_type === 'BUDGET' ? 'Travel Wallet 추가 환전' : '', notes: '' }));
+      await reload();
+    } finally { setSaving(false); }
+  }
+
+  async function removeEntry(entryId: string) {
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry) return;
+    if (!window.confirm(`${entry.entry_type === 'BUDGET' ? '예산' : '지출'} ${yen(entry.amount_jpy)} 기록을 삭제할까요?`)) return;
+    await del(`/api/budget/entries/${entryId}`);
+    await reload();
+  }
+
+  return <div className="budget-ledger-page">
+    <section className="budget-hero">
+      <div><p className="eyebrow">TRIP MONEY</p><h2>각자 얼마 쓰고 있는지 바로 보기.</h2><p>Travel Wallet 환전액을 예산으로 잡고, 여행 중에는 실제 결제한 사람과 결제수단을 기록합니다. 추가 환전은 예산 추가로 남겨 총액 변화도 추적합니다.</p></div>
+      <div className="budget-overview">
+        <span><small>총 예산</small><strong>{yen(totalBudget)}</strong></span>
+        <span><small>총 지출</small><strong>{yen(totalSpent)}</strong></span>
+        <span className={totalRemaining < 0 ? 'negative' : ''}><small>남은 예산</small><strong>{yen(totalRemaining)}</strong></span>
+      </div>
+    </section>
+
+    <section className="budget-person-grid">
+      {trip.participants.map((person) => {
+        const mine = entries.filter((entry) => entry.participant_id === person.id);
+        const budget = mine.filter((entry) => entry.entry_type === 'BUDGET').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+        const spent = mine.filter((entry) => entry.entry_type === 'EXPENSE').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+        const remaining = budget - spent;
+        const ratio = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : (spent > 0 ? 100 : 0);
+        const methods = mine.filter((entry) => entry.entry_type === 'EXPENSE').reduce<Record<string, number>>((acc, entry) => {
+          acc[entry.payment_method] = (acc[entry.payment_method] || 0) + Number(entry.amount_jpy || 0);
+          return acc;
+        }, {});
+        const walletBudget = mine.filter((entry) => entry.entry_type === 'BUDGET' && entry.payment_method === 'Travel Wallet').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+        return <article className={`budget-person-card ${remaining < 0 ? 'over' : ''}`} key={person.id}>
+          <header><div><span className="budget-avatar">{person.name.slice(0, 1).toUpperCase()}</span><span><small>PERSONAL BUDGET</small><strong>{budgetTravelerName(person.name)}</strong></span></div><b>{yen(remaining)}</b></header>
+          <div className="budget-person-numbers"><span><small>예산</small><strong>{yen(budget)}</strong></span><span><small>지출</small><strong>{yen(spent)}</strong></span><span><small>Travel Wallet 환전</small><strong>{yen(walletBudget)}</strong></span></div>
+          <div className="budget-meter"><i style={{ width: `${ratio}%` }} /></div>
+          <div className="budget-methods">{Object.entries(methods).length ? Object.entries(methods).map(([method, amount]) => <span key={method}>{method}<b>{yen(amount)}</b></span>) : <span>아직 지출 없음</span>}</div>
+          <footer><button onClick={() => openEntry(person.id, 'EXPENSE')}><Receipt size={14}/>지출 기록</button><button onClick={() => openEntry(person.id, 'BUDGET')}><Plus size={14}/>예산 추가</button></footer>
+        </article>;
+      })}
+    </section>
+
+    <section className="budget-entry-form" ref={formRef}>
+      <div className="trip-section-heading"><div><CreditCard/><span><p className="eyebrow">ADD TO LEDGER</p><h3>{form.entry_type === 'EXPENSE' ? '지출 기록' : '예산 · 환전 추가'}</h3></span></div><div className="budget-type-toggle"><button className={form.entry_type === 'EXPENSE' ? 'active' : ''} onClick={() => setForm((current) => ({ ...current, entry_type: 'EXPENSE', category: '식비', merchant: '' }))}>지출</button><button className={form.entry_type === 'BUDGET' ? 'active' : ''} onClick={() => setForm((current) => ({ ...current, entry_type: 'BUDGET', payment_method: 'Travel Wallet', category: '환전 · 충전', merchant: 'Travel Wallet 추가 환전' }))}>예산 추가</button></div></div>
+      <div className="budget-form-grid">
+        <label>누가<select value={form.participant_id} onChange={(event) => setForm({ ...form, participant_id: event.target.value })}>{trip.participants.map((person) => <option value={person.id} key={person.id}>{budgetTravelerName(person.name)}</option>)}</select></label>
+        <label>금액 · JPY<input inputMode="numeric" type="number" min="1" step="1" value={form.amount_jpy} onChange={(event) => setForm({ ...form, amount_jpy: event.target.value })} placeholder="1200" /></label>
+        <label>결제수단<select value={form.payment_method} onChange={(event) => setForm({ ...form, payment_method: event.target.value })}>{budgetPaymentMethods.map((method) => <option key={method}>{method}</option>)}</select></label>
+        <label>날짜<input type="date" min={trip.start_date} max={trip.end_date} value={form.occurred_on} onChange={(event) => setForm({ ...form, occurred_on: event.target.value })} /></label>
+        {form.entry_type === 'EXPENSE' && <label>분류<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{budgetExpenseCategories.map((category) => <option key={category}>{category}</option>)}</select></label>}
+        <label className="budget-merchant">{form.entry_type === 'BUDGET' ? '예산 메모' : '어디서 썼는지'}<input value={form.merchant} onChange={(event) => setForm({ ...form, merchant: event.target.value })} placeholder={form.entry_type === 'BUDGET' ? 'Travel Wallet 추가 환전' : 'Kura Sushi / 지하철 / 편의점'} /></label>
+        <label className="budget-note">메모<input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="둘이 먹은 저녁 / 면세 쇼핑 등" /></label>
+        <button className="budget-save" onClick={addEntry} disabled={saving || !form.participant_id || Number(form.amount_jpy) <= 0}>{saving ? '저장 중…' : form.entry_type === 'EXPENSE' ? '지출 저장' : '예산 추가 저장'}</button>
+      </div>
+    </section>
+
+    <section className="budget-ledger-list">
+      <div className="trip-section-heading"><div><Receipt/><span><p className="eyebrow">LEDGER</p><h3>전체 가계부</h3></span></div><b>{entries.length}건</b></div>
+      {entries.length ? <div>{entries.map((entry) => {
+        const person = trip.participants.find((item) => item.id === entry.participant_id);
+        const budget = entry.entry_type === 'BUDGET';
+        return <article className={budget ? 'budget-row funding' : 'budget-row expense'} key={entry.id}>
+          <span className="budget-row-icon">{budget ? <Wallet size={15}/> : <Receipt size={15}/>}</span>
+          <div className="budget-row-copy"><span>{entry.occurred_on} · {person ? budgetTravelerName(person.name) : '여행자'} · {entry.payment_method}</span><strong>{entry.merchant || entry.category || (budget ? '예산 추가' : '지출')}</strong>{entry.notes && <small>{entry.notes}</small>}</div>
+          <div className="budget-row-amount"><strong>{budget ? '+' : '-'}{yen(entry.amount_jpy)}</strong><small>{entry.category || (budget ? '환전 · 충전' : '기타')}</small></div>
+          <button className="ghost-icon" onClick={() => removeEntry(entry.id)} aria-label="기록 삭제"><Trash2 size={14}/></button>
+        </article>;
+      })}</div> : <div className="budget-empty">아직 기록이 없습니다.</div>}
+    </section>
   </div>;
 }
 

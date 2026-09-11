@@ -1,7 +1,7 @@
 export type PendingMutation = {
   id: string;
   path: string;
-  method: 'PATCH';
+  method: 'PATCH' | 'POST' | 'DELETE';
   body: unknown;
   created_at: number;
 };
@@ -57,12 +57,15 @@ async function listPending(): Promise<PendingMutation[]> {
   return rows.sort((a, b) => a.created_at - b.created_at);
 }
 
-async function queueMutation(path: string, body: unknown) {
-  const existing = (await listPending().catch(() => [])).filter((item) => item.path === path && item.method === 'PATCH');
-  const previousBody = existing.reduce<Record<string, unknown>>((merged, item) => ({ ...merged, ...((item.body || {}) as Record<string, unknown>) }), {});
-  const mergedBody = { ...previousBody, ...((body || {}) as Record<string, unknown>) };
-  for (const item of existing) await removeMutation(item.id);
-  const pending: PendingMutation = { id: mutationId(), path, method: 'PATCH', body: mergedBody, created_at: Date.now() };
+async function queueMutation(path: string, method: PendingMutation['method'], body: unknown) {
+  let queuedBody = body;
+  if (method === 'PATCH') {
+    const existing = (await listPending().catch(() => [])).filter((item) => item.path === path && item.method === 'PATCH');
+    const previousBody = existing.reduce<Record<string, unknown>>((merged, item) => ({ ...merged, ...((item.body || {}) as Record<string, unknown>) }), {});
+    queuedBody = { ...previousBody, ...((body || {}) as Record<string, unknown>) };
+    for (const item of existing) await removeMutation(item.id);
+  }
+  const pending: PendingMutation = { id: mutationId(), path, method, body: queuedBody, created_at: Date.now() };
   await withStore(MUTATION_STORE, 'readwrite', (store) => store.put(pending));
   emitSyncState({ mutation: pending });
   return pending;
@@ -204,9 +207,13 @@ async function request<T>(path: string, init?: RequestInit, allowQueue = true): 
       headers: { 'content-type': 'application/json', ...(init?.headers || {}) },
     });
   } catch (error) {
-    if (allowQueue && init?.method === 'PATCH' && path.startsWith('/api/')) {
-      const body = init.body ? JSON.parse(String(init.body)) : null;
-      await queueMutation(path, body);
+    const method = String(init?.method || 'GET').toUpperCase() as PendingMutation['method'];
+    const queueablePatch = method === 'PATCH' && path.startsWith('/api/');
+    const queueableBudgetPost = method === 'POST' && /^\/api\/trips\/[^/]+\/budget\/entries$/.test(path);
+    const queueableBudgetDelete = method === 'DELETE' && /^\/api\/budget\/entries\/[^/]+$/.test(path);
+    if (allowQueue && (queueablePatch || queueableBudgetPost || queueableBudgetDelete)) {
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      await queueMutation(path, method, body);
       return { ok: true, queued: true } as T;
     }
     throw error;
@@ -257,6 +264,7 @@ export async function flushQueuedMutations() {
 
 function applyMutationToTrip<T extends Record<string, any>>(trip: T, mutation: PendingMutation) {
     const body = (mutation.body || {}) as Record<string, any>;
+    const mutableTrip = trip as Record<string, any>;
     let match = mutation.path.match(/^\/api\/events\/([^/]+)$/);
     if (match) {
       const event = trip.events?.find((item: any) => item.id === match![1]);
@@ -321,6 +329,30 @@ function applyMutationToTrip<T extends Record<string, any>>(trip: T, mutation: P
     if (match) {
       const item = trip.packing?.find((row: any) => row.id === match![1]);
       if (item) Object.assign(item, body);
+      return;
+    }
+    match = mutation.path.match(/^\/api\/trips\/([^/]+)\/budget\/entries$/);
+    if (match && mutation.method === 'POST') {
+      mutableTrip.budget_entries ||= [];
+      if (body.id && !mutableTrip.budget_entries.some((row: any) => row.id === body.id)) {
+        mutableTrip.budget_entries.unshift({
+          ...body,
+          trip_id: match[1],
+          source: 'manual',
+          created_at: new Date(mutation.created_at).toISOString(),
+          updated_at: new Date(mutation.created_at).toISOString(),
+        });
+      }
+      return;
+    }
+    match = mutation.path.match(/^\/api\/budget\/entries\/([^/]+)$/);
+    if (match) {
+      if (mutation.method === 'DELETE') {
+        mutableTrip.budget_entries = (mutableTrip.budget_entries || []).filter((row: any) => row.id !== match![1]);
+      } else if (mutation.method === 'PATCH') {
+        const entry = mutableTrip.budget_entries?.find((row: any) => row.id === match![1]);
+        if (entry) Object.assign(entry, body);
+      }
     }
 }
 

@@ -125,6 +125,25 @@ CREATE TABLE IF NOT EXISTS trip_checklist_items (
 
 CREATE INDEX IF NOT EXISTS idx_trip_checklist_trip ON trip_checklist_items(trip_id, sort_order);
 
+CREATE TABLE IF NOT EXISTS trip_budget_entries (
+  id TEXT PRIMARY KEY,
+  trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+  entry_type TEXT NOT NULL DEFAULT 'EXPENSE',
+  amount_jpy INTEGER NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'Travel Wallet',
+  category TEXT,
+  merchant TEXT,
+  occurred_on TEXT NOT NULL,
+  notes TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_budget_entries_trip ON trip_budget_entries(trip_id, occurred_on, created_at);
+CREATE INDEX IF NOT EXISTS idx_trip_budget_entries_participant ON trip_budget_entries(participant_id, occurred_on, created_at);
+
 CREATE TABLE IF NOT EXISTS restaurants (
   id TEXT PRIMARY KEY,
   trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -349,6 +368,10 @@ export function getTrip(tripId: string) {
   }
   const checklist = rawChecklist.map((item) => ({ ...item, packing_ids: packingIdsByChecklist.get(item.id) || [] }));
   const packing = rawPacking.map((item) => ({ ...item, checklist_ids: checklistIdsByPacking.get(item.id) || [] }));
+  const budget_entries = db.prepare(`
+    SELECT * FROM trip_budget_entries WHERE trip_id = ?
+    ORDER BY occurred_on DESC, created_at DESC
+  `).all(tripId);
   const restaurants = db.prepare('SELECT * FROM restaurants WHERE trip_id = ? ORDER BY COALESCE(planned_date, \'9999-12-31\'), sort_order, created_at').all(tripId) as any[];
   const guides = db.prepare('SELECT * FROM trip_guides WHERE trip_id = ? ORDER BY section, sort_order, created_at').all(tripId);
   const options = db.prepare('SELECT * FROM trip_options WHERE trip_id = ? ORDER BY group_key, sort_order, created_at').all(tripId);
@@ -436,7 +459,7 @@ export function getTrip(tripId: string) {
       .sort((a, b) => String(b.name).length - String(a.name).length)[0];
     return match ? { ...event, image_url: match.image_url, image_source_url: match.source_url } : event;
   });
-  return { ...(trip as object), participants, events: eventsWithImages, places, packing, packing_bags, checklist, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots, decision_slots: richDecisionSlots };
+  return { ...(trip as object), participants, events: eventsWithImages, places, packing, packing_bags, checklist, budget_entries, restaurants: richRestaurants, guides, options, meal_slots: richMealSlots, decision_slots: richDecisionSlots };
 }
 
 function safeJson(value: string) {
