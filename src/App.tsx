@@ -10,7 +10,7 @@ import { api, applyPendingMutationsToTrip, applyQueuedMutationToTrip, clearOffli
 import type { OfflinePackInfo } from './api';
 import type { MealSlot, PackingItem, Place, Restaurant, SearchPlace, Trip, TripEvent, TripSummary, WeatherDay, WeatherHour } from './types';
 
-const socket = io({ autoConnect: true });
+const socket = io({ autoConnect: !location.pathname.endsWith('/print') });
 
 function navigate(path: string) {
   history.pushState({}, '', path);
@@ -24,6 +24,8 @@ export default function App() {
     addEventListener('popstate', onPop);
     return () => removeEventListener('popstate', onPop);
   }, []);
+  const printMatch = path.match(/^\/trip\/([^/]+)\/print$/);
+  if (printMatch) return <TripPrintPage tripId={printMatch[1]} />;
   const match = path.match(/^\/trip\/([^/]+)/);
   return match ? <TripPage tripId={match[1]} /> : <HomePage />;
 }
@@ -100,6 +102,25 @@ function tripEventStatus(event: TripEvent): TripEventStatus {
   const status = event.event_status as TripEventStatus | undefined;
   if (status && ['PLANNED', 'DONE', 'SKIPPED', 'CANCELLED'].includes(status)) return status;
   return event.completed_at ? 'DONE' : 'PLANNED';
+}
+
+const printableTabLabels: Record<Tab, string> = {
+  today: '오늘',
+  'trip-weather': '날씨 · 오늘의 코디',
+  phrases: '일본어 표현',
+  'shopping-guide': '쇼핑 리스트',
+  budget: '예산 · 지출',
+  guide: '준비 · 예약',
+  schedule: '전체 일정',
+  map: '지도 · 장소',
+  votes: '후보 · 결정',
+  packing: '짐 · 코디',
+  inbox: 'AI 가져오기',
+};
+
+function openTripPrintView(tripId: string, view: 'all' | 'section', tab: Tab, mode: WorkspaceMode) {
+  const query = new URLSearchParams({ view, tab, mode, autoprint: '1' });
+  window.open(`/trip/${tripId}/print?${query.toString()}`, '_blank', 'noopener,noreferrer');
 }
 
 function TripPage({ tripId }: { tripId: string }) {
@@ -296,7 +317,17 @@ function TripPage({ tripId }: { tripId: string }) {
       {!sidebarOpen && <button className="sidebar-reopen" onClick={() => toggleSidebar(true)} aria-label="사이드바 열기"><PanelLeftOpen size={17}/><span>메뉴</span></button>}
 
       <section className="main-panel">
-        <TripHeader trip={trip} weather={weather} mode={workspaceMode} onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')} onAdd={() => setQuickAdd(true)} onOpenMenu={() => setMobileMenuOpen(true)} />
+        <TripHeader
+          trip={trip}
+          weather={weather}
+          mode={workspaceMode}
+          activeTab={tab}
+          onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')}
+          onAdd={() => setQuickAdd(true)}
+          onOpenMenu={() => setMobileMenuOpen(true)}
+          onPrintCurrent={() => openTripPrintView(trip.id, 'section', tab, workspaceMode)}
+          onPrintAll={() => openTripPrintView(trip.id, 'all', tab, workspaceMode)}
+        />
         <OfflinePackBar info={offlinePack} saving={offlinePacking} resetting={offlineResetting} resetMessage={offlineResetMessage} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
         {(!syncState.online || syncState.pending > 0 || syncState.failed) && <div className={`sync-status-bar ${syncState.online ? 'syncing' : 'offline'}`}><span>{syncState.online ? <RefreshCw size={14}/> : <WifiOff size={14}/>}<b>{syncState.online ? (syncState.failed ? '동기화 재시도 필요' : '변경 동기화 중') : '오프라인'}</b>{syncState.pending > 0 && <em>{syncState.pending}개 변경 대기</em>}</span><small>{syncState.online ? '연결된 상태에서 자동 저장합니다.' : '일정 변경은 이 기기에 저장하고 연결되면 자동 반영합니다.'}</small></div>}
         <div className="content-area">
@@ -313,7 +344,7 @@ function TripPage({ tripId }: { tripId: string }) {
           {workspaceMode === 'plan' && tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={reload} />}
         </div>
       </section>
-      {mobileMenuOpen && <MobileMenuDrawer trip={trip} mode={workspaceMode} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelectMode={selectMode} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} />}
+      {mobileMenuOpen && <MobileMenuDrawer trip={trip} mode={workspaceMode} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelectMode={selectMode} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} onPrintCurrent={() => openTripPrintView(trip.id, 'section', tab, workspaceMode)} onPrintAll={() => openTripPrintView(trip.id, 'all', tab, workspaceMode)} />}
       {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={reload} />}
       <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} mode={workspaceMode} reload={reload} />
     </main>
@@ -416,7 +447,7 @@ function ModeSwitcher({ mode, onSelect }: { mode: WorkspaceMode; onSelect: (mode
   return <div className="mode-switcher" aria-label="여행 모드 선택"><button className={mode === 'plan' ? 'active' : ''} onClick={() => onSelect('plan')}><span>PLAN</span><small>여행 전</small></button><button className={mode === 'trip' ? 'active' : ''} onClick={() => onSelect('trip')}><span>TRIP</span><small>여행 중</small></button></div>;
 }
 
-function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void }) {
+function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose, onPrintCurrent, onPrintAll }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void; onPrintCurrent: () => void; onPrintAll: () => void }) {
   const groups: Array<{ label: string; items: Array<[Tab, React.ReactNode, string, number?]> }> = mode === 'plan' ? [
     { label: '준비', items: [['guide', <ClipboardCheck/>, '준비 · 예약'], ['budget', <Wallet/>, '예산 · 지출'], ['packing', <Luggage/>, '짐 · 코디']] },
     { label: '계획', items: [['schedule', <CalendarDays/>, '일정 편집'], ['votes', <Vote/>, '후보 · 결정', trip.places.length], ['map', <Compass/>, '지도 · 리서치']] },
@@ -430,12 +461,12 @@ function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelect
       <header><div><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><small>{formatDateRange(trip.start_date, trip.end_date)}</small></div></div><button onClick={onClose} aria-label="메뉴 닫기"><X size={22}/></button></header>
       <ModeSwitcher mode={mode} onSelect={onSelectMode} />
       <nav>{groups.map((group) => <NavGroup key={group.label} label={group.label}>{group.items.map(([key, icon, label, count]) => <NavButton key={key} active={tab === key} icon={icon} label={label} count={count} onClick={() => onSelect(key)} />)}</NavGroup>)}</nav>
-      <footer><label className="planner-name"><Users size={16}/><input value={plannerName} onChange={(event) => onNameChange(event.target.value)} aria-label="내 이름" /></label><span>실시간 공동 편집</span></footer>
+      <footer><div className="mobile-menu-pdf"><button onClick={() => { onPrintCurrent(); onClose(); }}><Printer size={15}/>{printableTabLabels[tab]} PDF</button><button onClick={() => { onPrintAll(); onClose(); }}><Download size={15}/>전체 여행 PDF</button></div><label className="planner-name"><Users size={16}/><input value={plannerName} onChange={(event) => onNameChange(event.target.value)} aria-label="내 이름" /></label><span>실시간 공동 편집</span></footer>
     </aside>
   </div>;
 }
 
-function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { trip: Trip; weather: WeatherDay[]; mode: WorkspaceMode; onToggleMode: () => void; onAdd: () => void; onOpenMenu: () => void }) {
+function TripHeader({ trip, weather, mode, activeTab, onToggleMode, onAdd, onOpenMenu, onPrintCurrent, onPrintAll }: { trip: Trip; weather: WeatherDay[]; mode: WorkspaceMode; activeTab: Tab; onToggleMode: () => void; onAdd: () => void; onOpenMenu: () => void; onPrintCurrent: () => void; onPrintAll: () => void }) {
   const today = todayInTimeZone('Asia/Tokyo');
   const featuredWeather = weather.find((item) => item.date === today) || weather[0];
   const forecastLabel = featuredWeather ? (featuredWeather.date === today ? '오늘 예보' : `${formatMonthDay(featuredWeather.date)} 예보`) : '';
@@ -445,9 +476,243 @@ function TripHeader({ trip, weather, mode, onToggleMode, onAdd, onOpenMenu }: { 
     <div className="header-actions">
       <button className={`header-mode-chip ${mode}`} onClick={onToggleMode}><span>{mode.toUpperCase()}</span><small>{mode === 'plan' ? '여행 전' : '여행 중'}</small></button>
       {featuredWeather && <div className="weather-chip"><span>{weatherIcon(featuredWeather.code)}</span><div><strong>{Math.round(featuredWeather.max)}° / {Math.round(featuredWeather.min)}°</strong><small>{forecastLabel} · 강수 {featuredWeather.rain}%</small></div></div>}
+      <div className="pdf-actions" aria-label="PDF 저장">
+        <button className="secondary pdf-action" onClick={onPrintCurrent} title={`${printableTabLabels[activeTab]} PDF 저장`}><Printer size={15}/><span>현재 메뉴 PDF</span></button>
+        <button className="secondary pdf-action all" onClick={onPrintAll} title="전체 여행 PDF 저장"><Download size={15}/><span>전체 PDF</span></button>
+      </div>
       <button className="primary" onClick={onAdd}><Plus size={17} /> 일정 추가</button>
     </div>
   </header>;
+}
+
+function TripPrintPage({ tripId }: { tripId: string }) {
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [weather, setWeather] = useState<WeatherDay[]>([]);
+  const [error, setError] = useState('');
+  const query = useMemo(() => new URLSearchParams(location.search), []);
+  const view = query.get('view') === 'section' ? 'section' : 'all';
+  const requestedTab = query.get('tab') as Tab | null;
+  const tab: Tab = requestedTab && requestedTab in printableTabLabels ? requestedTab : 'schedule';
+  const mode: WorkspaceMode = query.get('mode') === 'trip' ? 'trip' : 'plan';
+  const autoPrint = query.get('autoprint') === '1';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const currentTrip = await api<Trip>(`/api/trips/${tripId}`);
+        if (cancelled) return;
+        setTrip(currentTrip);
+        const results = await Promise.allSettled(dateRange(currentTrip.start_date, currentTrip.end_date).map(async (date) => {
+          const anchor = weatherAnchorForDate(currentTrip, date);
+          return api<{ daily: WeatherDay[] }>(`/api/weather?lat=${anchor.lat}&lng=${anchor.lng}&start=${date}&end=${date}`);
+        }));
+        if (!cancelled) setWeather(results.flatMap((result) => result.status === 'fulfilled' ? result.value.daily : []).sort((a, b) => a.date.localeCompare(b.date)));
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'PDF용 여행 데이터를 불러오지 못했습니다.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tripId]);
+
+  useEffect(() => {
+    if (!trip) return;
+    document.title = `${trip.title} - ${view === 'all' ? '전체 여행' : printableTabLabels[tab]} PDF`;
+    document.documentElement.dataset.printReady = 'true';
+    if (!autoPrint) return;
+    const timer = window.setTimeout(() => window.print(), 900);
+    return () => window.clearTimeout(timer);
+  }, [trip, view, tab, autoPrint]);
+
+  if (error) return <main className="print-loading"><AlertTriangle/><strong>PDF 준비 실패</strong><p>{error}</p><button className="secondary" onClick={() => history.back()}>돌아가기</button></main>;
+  if (!trip) return <main className="print-loading"><div className="brand-mark">M</div><span>인쇄용 여행 문서를 준비하는 중…</span></main>;
+
+  return <main className="print-shell">
+    <div className="print-toolbar no-print">
+      <button className="secondary" onClick={() => history.back()}><ArrowLeft size={15}/> 여행으로 돌아가기</button>
+      <div><strong>{view === 'all' ? '전체 여행 PDF' : `${printableTabLabels[tab]} PDF`}</strong><span>인쇄 창에서 “PDF로 저장”을 선택하세요.</span></div>
+      <button className="primary" onClick={() => window.print()}><Download size={16}/> PDF 저장 · 인쇄</button>
+    </div>
+    <article className="print-document">
+      {view === 'all'
+        ? <TripPrintBook trip={trip} weather={weather}/>
+        : <TripPrintSection trip={trip} weather={weather} tab={tab} mode={mode}/>
+      }
+    </article>
+  </main>;
+}
+
+function PrintDocumentHeader({ trip, label }: { trip: Trip; label: string }) {
+  return <header className="print-doc-header">
+    <div><span>{trip.emoji}</span><div><p>MYTRIP · OFFLINE PRINT</p><h1>{trip.title}</h1><strong>{label}</strong></div></div>
+    <dl><div><dt>여행</dt><dd>{formatDateRange(trip.start_date, trip.end_date)}</dd></div><div><dt>지역</dt><dd>{trip.destination}</dd></div><div><dt>여행자</dt><dd>{trip.participants.map((person) => person.name).join(' · ')}</dd></div></dl>
+  </header>;
+}
+
+function TripPrintBook({ trip, weather }: { trip: Trip; weather: WeatherDay[] }) {
+  return <>
+    <section className="print-cover">
+      <PrintDocumentHeader trip={trip} label="전체 여행 프린트북"/>
+      <div className="print-cover-grid">
+        <article><span>DATES</span><strong>{formatDateRange(trip.start_date, trip.end_date)}</strong><small>{dateRange(trip.start_date, trip.end_date).length} days · Kyoto + Osaka</small></article>
+        <article><span>PACE</span><strong>음식 + 휴식 + 핵심 관광</strong><small>대중교통 · 도보 · 7k-10k steps 목표</small></article>
+        <article><span>FOOD</span><strong>하루 3끼 · 초밥/해산물 우선</strong><small>가능하면 1인 ¥3,000 이하 · 저렴할수록 가점</small></article>
+        <article><span>WEATHER</span><strong>비 오면 실내/아케이드 우선</strong><small>좋은 날만 optional 관광 추가</small></article>
+      </div>
+      <p className="print-cover-note">이 문서는 사이트의 현재 일정, 선택 식당, 준비 체크, 예산, 짐 목록을 기준으로 생성됩니다. 종이에서 직접 체크할 수 있도록 완료 여부와 별개로 체크 박스를 유지했습니다.</p>
+    </section>
+    <PrintGuideChapter trip={trip}/>
+    <PrintScheduleChapter trip={trip}/>
+    <PrintBudgetChapter trip={trip}/>
+    <PrintPackingChapter trip={trip}/>
+    <PrintWeatherChapter trip={trip} weather={weather}/>
+    <PrintShoppingChapter trip={trip}/>
+    <PrintPhraseChapter/>
+    <PrintDecisionChapter trip={trip}/>
+    <PrintMapChapter trip={trip}/>
+    <PrintImportedChapter trip={trip} onlyWhenPresent/>
+  </>;
+}
+
+function TripPrintSection({ trip, weather, tab, mode }: { trip: Trip; weather: WeatherDay[]; tab: Tab; mode: WorkspaceMode }) {
+  const chapter = (() => {
+    switch (tab) {
+      case 'guide': return <PrintGuideChapter trip={trip}/>;
+      case 'schedule': return <PrintScheduleChapter trip={trip}/>;
+      case 'budget': return <PrintBudgetChapter trip={trip}/>;
+      case 'packing': return <PrintPackingChapter trip={trip}/>;
+      case 'trip-weather': return <PrintWeatherChapter trip={trip} weather={weather}/>;
+      case 'shopping-guide': return <PrintShoppingChapter trip={trip}/>;
+      case 'phrases': return <PrintPhraseChapter/>;
+      case 'votes': return <PrintDecisionChapter trip={trip}/>;
+      case 'map': return <PrintMapChapter trip={trip}/>;
+      case 'inbox': return <PrintImportedChapter trip={trip}/>;
+      case 'today': return <PrintTodayChapter trip={trip} weather={weather}/>;
+      default: return <PrintScheduleChapter trip={trip}/>;
+    }
+  })();
+  return <><PrintDocumentHeader trip={trip} label={`${printableTabLabels[tab]} · ${mode.toUpperCase()}`}/>{chapter}</>;
+}
+
+function PrintChapterTitle({ eyebrow, title, meta }: { eyebrow: string; title: string; meta?: string }) {
+  return <header className="print-chapter-title"><div><p>{eyebrow}</p><h2>{title}</h2></div>{meta && <span>{meta}</span>}</header>;
+}
+
+function PrintCheck({ checked = false }: { checked?: boolean }) {
+  return <span className={`print-checkbox ${checked ? 'checked' : ''}`}>{checked ? <Check size={11}/> : null}</span>;
+}
+
+function PrintGuideChapter({ trip }: { trip: Trip }) {
+  const checklistGroups = trip.checklist.reduce<Record<string, typeof trip.checklist>>((groups, item) => { (groups[item.category] ||= []).push(item); return groups; }, {});
+  const rules = trip.guides.filter((item) => item.section === 'rules');
+  const transport = trip.guides.filter((item) => item.section === 'transport');
+  const restaurants = new globalThis.Map(trip.restaurants.map((restaurant) => [restaurant.id, restaurant] as const));
+  const selectedIds = new Set((trip.meal_slots || []).map((slot) => slot.selected_restaurant_id).filter(Boolean));
+  const selectedRestaurants = trip.restaurants.filter((restaurant) => selectedIds.has(restaurant.id));
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="PLAN · 준비 · 예약" title="출발 전 체크 + 예약 + 식사 선택" meta={`${trip.checklist.filter((item) => item.status === 'DONE').length}/${trip.checklist.length} 준비 완료`}/>
+    {rules.length > 0 && <div className="print-rule-grid">{rules.map((rule) => <article key={rule.id}><strong>{rule.title}</strong><p>{rule.details}</p></article>)}</div>}
+    <div className="print-two-col">
+      <div className="print-card"><h3>출발 전 체크</h3>{Object.entries(checklistGroups).map(([category, items]) => <section className="print-check-group" key={category}><h4>{category}</h4>{items.map((item) => <div className="print-check-row" key={item.id}><PrintCheck checked={item.status === 'DONE'}/><div><strong>{item.title}</strong>{item.notes && <small>{item.notes}</small>}</div></div>)}</section>)}</div>
+      <div className="print-card"><h3>선택 식당 · 예약 상태</h3>{selectedRestaurants.length ? selectedRestaurants.map((restaurant) => <div className="print-reservation-row" key={restaurant.id}><PrintCheck checked={restaurant.reservation_status === 'BOOKED' || restaurant.reservation_action === 'WALK-IN ONLY'}/><div><strong>{restaurant.name}</strong><small>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : restaurant.city || ''} · {restaurant.price_range || '예산 확인'}</small></div><b>{restaurant.reservation_action === 'WALK-IN ONLY' ? 'WALK-IN' : restaurant.reservation_status}</b></div>) : <p className="print-muted">선택된 식당이 없습니다.</p>}</div>
+    </div>
+    {transport.length > 0 && <div className="print-card print-transport"><h3>구간별 이동</h3><div>{transport.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div></div>}
+    <div className="print-card print-meals"><h3>식사별 선택 · PLAN B</h3>{(trip.meal_slots || []).map((slot) => <section key={slot.id}><header><span>{formatMonthDay(slot.date)} · {slot.time || ''} · {slot.area || ''}</span><strong>{slot.label}</strong></header><div>{slot.option_ids.map((restaurantId) => { const restaurant = restaurants.get(restaurantId); if (!restaurant) return null; const selected = slot.selected_restaurant_id === restaurant.id; return <article className={selected ? 'selected' : ''} key={restaurant.id}><span>{selected ? 'SELECTED' : 'PLAN B'}</span><strong>{restaurant.name}</strong><small>{restaurant.price_range || '예산 확인'} · {restaurant.hours || '영업시간 확인'}</small>{restaurant.notes && <p>{restaurant.notes}</p>}</article>; })}</div></section>)}</div>
+  </section>;
+}
+
+function PrintScheduleChapter({ trip, targetDate }: { trip: Trip; targetDate?: string }) {
+  const days = targetDate ? [targetDate] : dateRange(trip.start_date, trip.end_date);
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="TRIP · 전체 일정" title={targetDate ? `${formatDay(targetDate)} 오늘 일정` : '5일 전체 일정'} meta={`${trip.events.length} events`}/>
+    <div className="print-day-list">{days.map((date, dayIndex) => {
+      const events = trip.events.filter((event) => event.date === date).sort((a, b) => `${a.start_time || '99:99'}-${a.sort_order}`.localeCompare(`${b.start_time || '99:99'}-${b.sort_order}`));
+      return <section className="print-day" key={date}><header><div><span>DAY {dateRange(trip.start_date, date).length}</span><h3>{formatDay(date)}</h3></div><b>{events.length}개 일정</b></header>{events.length ? events.map((event) => { const status = tripEventStatus(event); return <article className={`print-event status-${status.toLowerCase()}`} key={event.id}><PrintCheck checked={status === 'DONE'}/><time>{event.start_time || '--:--'}{event.end_time ? `-${event.end_time}` : ''}</time><div><strong>{event.title}</strong>{event.location && <span>{event.location}</span>}{event.address && <small>{event.address}</small>}{event.notes && <p>{event.notes}</p>}</div><em>{status === 'PLANNED' ? '' : status}</em></article>; }) : <p className="print-muted">등록된 일정 없음</p>}</section>;
+    })}</div>
+  </section>;
+}
+
+function PrintBudgetChapter({ trip }: { trip: Trip }) {
+  const entries = trip.budget_entries || [];
+  const totalBudget = entries.filter((entry) => entry.entry_type === 'BUDGET').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+  const totalSpent = entries.filter((entry) => entry.entry_type === 'EXPENSE').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0);
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="PLAN · 예산 · 지출" title="여행 가계부" meta={`남은 예산 ${yen(totalBudget - totalSpent)}`}/>
+    <div className="print-budget-summary"><article><span>총 예산</span><strong>{yen(totalBudget)}</strong></article><article><span>총 지출</span><strong>{yen(totalSpent)}</strong></article><article><span>남은 예산</span><strong>{yen(totalBudget - totalSpent)}</strong></article></div>
+    <div className="print-two-col">{trip.participants.map((person) => { const mine = entries.filter((entry) => entry.participant_id === person.id); const budget = mine.filter((entry) => entry.entry_type === 'BUDGET').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0); const spent = mine.filter((entry) => entry.entry_type === 'EXPENSE').reduce((sum, entry) => sum + Number(entry.amount_jpy || 0), 0); return <article className="print-card" key={person.id}><h3>{budgetTravelerName(person.name)}</h3><div className="print-person-budget"><span>예산 <b>{yen(budget)}</b></span><span>지출 <b>{yen(spent)}</b></span><span>남음 <b>{yen(budget - spent)}</b></span></div></article>; })}</div>
+    <div className="print-card"><h3>전체 기록</h3>{entries.length ? entries.map((entry) => { const person = trip.participants.find((item) => item.id === entry.participant_id); return <div className="print-ledger-row" key={entry.id}><span>{entry.occurred_on}</span><strong>{entry.merchant || entry.category || '기록'}</strong><small>{person?.name || '여행자'} · {entry.payment_method}{entry.notes ? ` · ${entry.notes}` : ''}</small><b>{entry.entry_type === 'BUDGET' ? '+' : '-'}{yen(entry.amount_jpy)}</b></div>; }) : <p className="print-muted">아직 기록이 없습니다.</p>}</div>
+  </section>;
+}
+
+function PrintPackingChapter({ trip }: { trip: Trip }) {
+  const groups = trip.packing.reduce<Record<string, typeof trip.packing>>((result, item) => { (result[item.category] ||= []).push(item); return result; }, {});
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="PLAN · 짐 · 코디" title="준비물 체크리스트" meta={`${trip.packing.filter((item) => item.checked).length}/${trip.packing.length} checked`}/>
+    {(trip.packing_bags || []).length > 0 && <div className="print-bag-grid">{trip.packing_bags.map((bag) => { const weight = Number(bag.tare_weight || 0) + trip.packing.filter((item) => item.bag_id === bag.id).reduce((sum, item) => sum + Number(item.weight_kg || 0) * Number(item.quantity || 1), 0); return <article key={bag.id}><strong>{bag.name}</strong><span>{bag.owner || '공용'}</span><b>{weight.toFixed(1)}{bag.weight_limit ? ` / ${bag.weight_limit}` : ''} kg</b>{bag.notes && <small>{bag.notes}</small>}</article>; })}</div>}
+    <div className="print-packing-grid">{Object.entries(groups).map(([category, items]) => <section className="print-card" key={category}><h3>{category}</h3>{items.map((item) => { const bag = trip.packing_bags?.find((entry) => entry.id === item.bag_id); return <div className="print-check-row" key={item.id}><PrintCheck checked={Boolean(item.checked)}/><div><strong>{item.label}{item.quantity > 1 ? ` ×${item.quantity}` : ''}</strong><small>{[item.owner || '공용', bag?.name, item.reason].filter(Boolean).join(' · ')}</small></div></div>; })}</section>)}</div>
+  </section>;
+}
+
+function PrintWeatherChapter({ trip, weather }: { trip: Trip; weather: WeatherDay[] }) {
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="TRIP · 날씨 · 오늘의 코디" title="날씨에 맞춰 걷기 강도 조절" meta={weather.length ? `${Math.round(Math.min(...weather.map((item) => item.min)))}-${Math.round(Math.max(...weather.map((item) => item.max)))}°C` : '예보 확인 필요'}/>
+    <div className="print-weather-grid">{dateRange(trip.start_date, trip.end_date).map((date) => { const item = weather.find((entry) => entry.date === date); return <article key={date}><span>{formatDay(date)}</span><strong>{item ? `${weatherIcon(item.code)} ${Math.round(item.max)}° / ${Math.round(item.min)}°` : '예보 없음'}</strong><small>{item ? `강수 ${Math.round(item.rain)}%` : '현장에서 다시 확인'}</small><p>{item && item.rain >= 60 ? '우산 + 실내/아케이드 우선. optional 관광은 줄이기.' : item && item.max >= 27 ? '통기성 좋은 옷 + 물. 걷는 구간 사이 카페/식사 휴식.' : '얇은 레이어 + 편한 워킹화.'}</p></article>; })}</div>
+  </section>;
+}
+
+function PrintShoppingChapter({ trip }: { trip: Trip }) {
+  const shoppingEvents = trip.events.filter((event) => /Animate|Surugaya|Den Den|FamilyMart|Matsumoto|쇼핑|간식/i.test(`${event.title} ${event.location || ''}`)).sort((a, b) => `${a.date} ${a.start_time || ''}`.localeCompare(`${b.date} ${b.start_time || ''}`));
+  const groups = tripShoppingItems.reduce<Record<string, typeof tripShoppingItems>>((result, item) => { (result[item.category] ||= []).push(item); return result; }, {});
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="TRIP · 쇼핑 리스트" title="현지에서 먹기 · 싸게 사오기" meta={`${tripShoppingItems.length} items`}/>
+    {shoppingEvents.length > 0 && <div className="print-card"><h3>일정에 들어간 쇼핑</h3>{shoppingEvents.map((event) => <div className="print-shopping-route" key={event.id}><span>{formatMonthDay(event.date)} {event.start_time || ''}</span><strong>{event.title}</strong><small>{event.location || event.address}</small></div>)}</div>}
+    <div className="print-shopping-groups">{Object.entries(groups).map(([category, items]) => <section className="print-card" key={category}><h3>{category}</h3>{items.map((item) => <div className="print-shopping-item" key={item.id}><PrintCheck/><div><strong>{item.name}</strong><span>{item.price} · {item.buy}</span><small>{item.note}</small></div></div>)}</section>)}</div>
+  </section>;
+}
+
+function PrintPhraseChapter() {
+  const total = extendedTripPhraseGroups.reduce((sum, group) => sum + group.items.length, 0);
+  return <section className="print-chapter print-phrases">
+    <PrintChapterTitle eyebrow="TRIP · 일본어 표현" title="현장에서 바로 가리켜 보여주기" meta={`${total} phrases`}/>
+    <div className="print-phrase-groups">{extendedTripPhraseGroups.map((group) => <section className="print-card" key={group.id}><h3>{group.title}<span>{group.description}</span></h3>{group.items.map(([jp, sound, meaning]) => <div className="print-phrase-row" key={jp}><strong lang="ja">{jp}</strong><span>{sound}</span><small>{meaning}</small></div>)}</section>)}</div>
+  </section>;
+}
+
+function PrintDecisionChapter({ trip }: { trip: Trip }) {
+  const researched = trip.places.filter((place) => place.research);
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="PLAN · 후보 · 결정" title="선택한 플랜과 후보" meta={`${trip.decision_slots.length} decisions · ${trip.places.length} places`}/>
+    {trip.decision_slots.length > 0 && <div className="print-decision-list">{trip.decision_slots.map((slot) => <article className="print-card" key={slot.id}><header><span>{formatMonthDay(slot.date)} {slot.time || ''} · {slot.region}</span><h3>{slot.title}</h3></header>{slot.options.map((option) => <div className={`print-decision-option ${slot.selected_option_id === option.id ? 'selected' : ''}`} key={option.id}><PrintCheck checked={slot.selected_option_id === option.id}/><div><strong>{option.label}</strong><small>{[option.duration, option.price, option.route].filter(Boolean).join(' · ')}</small>{option.summary && <p>{option.summary}</p>}</div></div>)}</article>)}</div>}
+    {researched.length > 0 && <div className="print-card"><h3>리서치 후보</h3><div className="print-place-grid">{researched.map((place) => <article key={place.id}><strong>{place.name}</strong><span>{place.research?.region} · ♥ {place.vote_score || 0}</span>{place.research?.note && <small>{place.research.note}</small>}</article>)}</div></div>}
+  </section>;
+}
+
+function PrintMapChapter({ trip }: { trip: Trip }) {
+  const eventPlaces = trip.events.filter((event) => event.location || event.address);
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="PLAN/TRIP · 지도 · 장소" title="오프라인 주소 모음" meta={`${eventPlaces.length + trip.places.length} locations`}/>
+    <div className="print-card print-address-list"><h3>일정 장소</h3>{eventPlaces.map((event) => <div key={event.id}><span>{formatMonthDay(event.date)} {event.start_time || ''}</span><strong>{event.title}</strong><small>{event.address || event.location}</small></div>)}</div>
+    {trip.places.length > 0 && <div className="print-card print-address-list"><h3>저장한 후보</h3>{trip.places.map((place) => <div key={place.id}><span>{place.category}</span><strong>{place.name}</strong><small>{place.address || place.notes || '주소 미등록'}</small></div>)}</div>}
+  </section>;
+}
+
+function PrintImportedChapter({ trip, onlyWhenPresent = false }: { trip: Trip; onlyWhenPresent?: boolean }) {
+  const imported = trip.events.filter((event) => /import/i.test(event.source || ''));
+  if (onlyWhenPresent && !imported.length) return null;
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="PLAN · AI 가져오기" title="가져온 일정 결과" meta={`${imported.length} imported events`}/>
+    <div className="print-card">{imported.length ? imported.map((event) => <div className="print-ledger-row" key={event.id}><span>{event.date} {event.start_time || ''}</span><strong>{event.title}</strong><small>{event.location || event.address || event.notes || ''}</small></div>) : <p className="print-muted">AI 가져오기는 입력 도구라 원문을 저장하지 않습니다. 현재 일정에 반영된 항목은 전체 일정 PDF에서 확인하세요.</p>}</div>
+  </section>;
+}
+
+function PrintTodayChapter({ trip, weather }: { trip: Trip; weather: WeatherDay[] }) {
+  const today = todayInTimeZone('Asia/Tokyo');
+  const target = today >= trip.start_date && today <= trip.end_date ? today : trip.start_date;
+  const item = weather.find((entry) => entry.date === target);
+  return <section className="print-chapter">
+    <PrintChapterTitle eyebrow="TRIP · 오늘" title={`${formatDay(target)} 현장용 한 장`} meta={item ? `${weatherIcon(item.code)} ${Math.round(item.max)}°/${Math.round(item.min)}° · 강수 ${Math.round(item.rain)}%` : undefined}/>
+    <PrintScheduleChapter trip={trip} targetDate={target}/>
+  </section>;
 }
 
 function OfflinePackBar({ info, saving, resetting, resetMessage, online, error, onSave, onReset }: { info: OfflinePackInfo | null; saving: boolean; resetting: boolean; resetMessage: string; online: boolean; error: string; onSave: () => void; onReset: () => void }) {
