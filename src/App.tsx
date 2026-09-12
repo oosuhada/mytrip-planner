@@ -626,7 +626,7 @@ function TripPrintSection({ trip, weather, tab, mode }: { trip: Trip; weather: W
       default: return <PrintScheduleChapter trip={trip}/>;
     }
   })();
-  return <><PrintDocumentHeader trip={trip} label={`${printableTabLabels[tab]} · ${mode.toUpperCase()}`}/>{chapter}</>;
+  return <div className="print-section-document"><PrintDocumentHeader trip={trip} label={`${printableTabLabels[tab]} · ${mode.toUpperCase()}`}/>{chapter}</div>;
 }
 
 function PrintChapterTitle({ eyebrow, title, meta }: { eyebrow: string; title: string; meta?: string }) {
