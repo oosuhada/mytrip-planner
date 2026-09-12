@@ -242,6 +242,47 @@ function travelResourceHref(id: string) {
   return travelResourceLinks.find((link) => link.id === id)?.href || null;
 }
 
+const icocaPlans = [
+  {
+    person: 'Oosu',
+    device: 'iPhone 12 Pro',
+    account: '현재 Oosu Apple Account',
+    summary: '본인 폰 Wallet에 ICOCA 새로 발급 · 익스프레스 모드 사용',
+  },
+  {
+    person: 'Domenic',
+    device: 'iPhone 12 mini',
+    account: 'Domenic 전용 Apple Account',
+    summary: 'Oosu 계정 로그아웃 → Domenic 계정 로그인 → 그 다음 ICOCA 발급',
+  },
+] as const;
+
+const icocaSetupSteps = [
+  '두 iPhone 모두 최신 iOS로 업데이트하고 기기 암호를 켠다.',
+  '설정 → 일반 → 언어 및 지역에서 기기 지역을 일본으로 바꾼다.',
+  'Domenic용 iPhone 12 mini는 기존 Oosu Apple Account에서 먼저 로그아웃한다. 로그아웃하면 기존 Wallet 카드가 기기에서 제거될 수 있다.',
+  'Domenic 전용 Apple Account를 만들고 iPhone 12 mini에 로그인한 뒤 이중 인증을 완료한다. 일본 계정으로 만들 필요보다 기기 지역을 일본으로 맞추는 것이 공식 필수 조건이다.',
+  'Wallet → + → 교통 카드 → ICOCA에서 각자 별도 ICOCA를 발급한다. 첫 교통카드는 익스프레스 모드가 기본으로 켜진다.',
+  '충전용 Apple Pay 카드가 안 되면 일본 도착 후 세븐은행/로손은행 ATM, 일부 충전기·매장에서 현금 충전한다.',
+] as const;
+
+const icocaOfficialLinks = [
+  { label: 'JR서일본 · 지원 기종/필수 설정', href: 'https://www.jr-odekake.net/icoca/applepay/start/models/' },
+  { label: 'Apple · 일본 교통카드 사용법', href: 'https://support.apple.com/ko-kr/120474' },
+  { label: 'Apple · 카드 추가 문제 해결', href: 'https://support.apple.com/ko-kr/120475' },
+  { label: 'JR서일본 · ICOCA 충전 방법', href: 'https://www.jr-odekake.net/icoca/applepay/use/sf/' },
+] as const;
+
+function IcocaPlanPanel({ compact = false }: { compact?: boolean }) {
+  return <section className={`icoca-plan ${compact ? 'compact' : ''}`} aria-label="ICOCA 교통카드 설정">
+    <header><div><Wallet size={18}/><span><p className="eyebrow">ICOCA · APPLE WALLET</p><h3>교통카드 2대 운영</h3></span></div><b>iPhone 12 Pro + 12 mini</b></header>
+    <div className="icoca-device-grid">{icocaPlans.map((plan) => <article key={plan.person}><span>{plan.person}</span><strong>{plan.device}</strong><small>{plan.account}</small><p>{plan.summary}</p></article>)}</div>
+    {!compact && <ol className="icoca-steps">{icocaSetupSteps.map((step) => <li key={step}>{step}</li>)}</ol>}
+    <div className="icoca-alert"><AlertTriangle size={15}/><span><strong>중요</strong> ICOCA를 만든 뒤 Apple Account/iCloud에서 로그아웃하지 않기. 로그아웃하면 Wallet의 교통카드가 해당 기기에서 제거됩니다.</span></div>
+    <div className="icoca-links">{icocaOfficialLinks.map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={link.href}><ExternalLink size={12}/>{link.label}</a>)}</div>
+  </section>;
+}
+
 function openTripPrintView(tripId: string, view: 'all' | 'section', tab: Tab, mode: WorkspaceMode) {
   const query = new URLSearchParams({ view, tab, mode, autoprint: '1' });
   window.open(`/trip/${tripId}/print?${query.toString()}`, '_blank', 'noopener,noreferrer');
@@ -551,6 +592,8 @@ function TripGuidePanel({ trip, reload }: { trip: Trip; reload: () => void }) {
       <div className="transport-grid">{transport.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div>
     </section>
 
+    <IcocaPlanPanel />
+
     <TravelResourceLinks groups={['airport', 'kyoto', 'osaka']} title="공항 · 한국어 관광지도 바로가기" />
 
     {optionGroups.map(([key, group]) => group && <section className="guide-section compare-section" key={key}><div className="guide-section-head"><div><Navigation/><span><p className="eyebrow">{key === 'esim' ? 'CONNECTIVITY' : 'TRANSIT OPTIONS'}</p><h3>{group.title}</h3></span></div></div><div className="compare-table-wrap"><table className="compare-table"><thead><tr><th>옵션</th><th>가격</th><th>포함 / 방식</th><th>우리 일정 적합도</th><th>판단</th><th></th></tr></thead><tbody>{group.items.map((item) => <tr key={item.id} className={item.recommended ? 'recommended' : ''}><td data-label="옵션"><strong>{item.name}</strong>{item.recommended ? <span className="recommend-tag">추천</span> : null}</td><td data-label="가격">{item.price || '—'}</td><td data-label="포함 · 방식">{item.coverage || '—'}</td><td data-label="일정 적합도">{item.fit || '—'}</td><td data-label="판단">{item.verdict || '—'}</td><td data-label="바로가기"><div className="compare-actions">{item.purchase_url && <a href={item.purchase_url} target="_blank" rel="noreferrer"><ExternalLink size={11}/>{item.action_label || '구매'}</a>}{item.source_url && item.source_url !== item.purchase_url && <a className="muted-link" href={item.source_url} target="_blank" rel="noreferrer">공식</a>}</div></td></tr>)}</tbody></table></div></section>)}
@@ -750,6 +793,16 @@ function PrintTravelResourceLinks({ groups, title }: { groups: TravelResourceGro
   </div>;
 }
 
+function PrintIcocaPlan() {
+  return <div className="print-card print-icoca-plan">
+    <h3>ICOCA · Apple Wallet 2대 운영</h3>
+    <div className="print-icoca-devices">{icocaPlans.map((plan) => <article key={plan.person}><span>{plan.person}</span><strong>{plan.device}</strong><small>{plan.account}</small><p>{plan.summary}</p></article>)}</div>
+    <ol>{icocaSetupSteps.map((step) => <li key={step}>{step}</li>)}</ol>
+    <p className="print-icoca-warning"><strong>중요:</strong> ICOCA 발급 후 Apple Account/iCloud에서 로그아웃하지 않기. 충전용 카드가 안 되면 일본의 세븐은행·로손은행 ATM 또는 지원 충전기/매장에서 현금 충전.</p>
+    <div className="print-icoca-links">{icocaOfficialLinks.map((link) => <a href={link.href} key={link.href}>{link.label}</a>)}</div>
+  </div>;
+}
+
 function PrintGuideChapter({ trip }: { trip: Trip }) {
   const checklistGroups = trip.checklist.reduce<Record<string, typeof trip.checklist>>((groups, item) => { (groups[item.category] ||= []).push(item); return groups; }, {});
   const rules = trip.guides.filter((item) => item.section === 'rules');
@@ -765,6 +818,7 @@ function PrintGuideChapter({ trip }: { trip: Trip }) {
       <div className="print-card"><h3>선택 식당 · 예약 상태</h3>{selectedRestaurants.length ? selectedRestaurants.map((restaurant) => <div className="print-reservation-row" key={restaurant.id}><PrintCheck checked={restaurant.reservation_status === 'BOOKED' || restaurant.reservation_action === 'WALK-IN ONLY'}/><div><strong>{restaurant.name}</strong><small>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : restaurant.city || ''} · {restaurant.price_range || '예산 확인'}</small></div><b>{restaurant.reservation_action === 'WALK-IN ONLY' ? 'WALK-IN' : restaurant.reservation_status}</b></div>) : <p className="print-muted">선택된 식당이 없습니다.</p>}</div>
     </div>
     {transport.length > 0 && <div className="print-card print-transport"><h3>구간별 이동</h3><div>{transport.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div></div>}
+    <PrintIcocaPlan />
     <PrintTravelResourceLinks groups={['airport', 'kyoto', 'osaka']} title="공항 · 한국어 관광지도 바로가기" />
     <div className="print-card print-meals"><h3>식사별 선택 · PLAN B</h3>{(trip.meal_slots || []).map((slot) => <section key={slot.id}><header><span>{formatMonthDay(slot.date)} · {slot.time || ''} · {slot.area || ''}</span><strong>{slot.label}</strong></header><div>{slot.option_ids.map((restaurantId) => { const restaurant = restaurants.get(restaurantId); if (!restaurant) return null; const selected = slot.selected_restaurant_id === restaurant.id; return <article className={selected ? 'selected' : ''} key={restaurant.id}><span>{selected ? 'SELECTED' : 'PLAN B'}</span><strong>{restaurant.name}</strong><small>{restaurant.price_range || '예산 확인'} · {restaurant.hours || '영업시간 확인'}</small>{restaurant.notes && <p>{restaurant.notes}</p>}</article>; })}</div></section>)}</div>
   </section>;
@@ -861,6 +915,7 @@ function PrintTodayChapter({ trip, weather }: { trip: Trip; weather: WeatherDay[
   const item = weather.find((entry) => entry.date === target);
   return <section className="print-chapter">
     <PrintChapterTitle eyebrow="TRIP · 오늘" title={`${formatDay(target)} 현장용 한 장`} meta={item ? `${weatherIcon(item.code)} ${Math.round(item.max)}°/${Math.round(item.min)}° · 강수 ${Math.round(item.rain)}%` : undefined}/>
+    {target === trip.start_date && <PrintIcocaPlan />}
     {target === trip.start_date && <PrintTravelResourceLinks groups={['airport', 'kyoto']} title="출국 · 교토 도착 바로가기" />}
     <PrintScheduleChapter trip={trip} targetDate={target}/>
   </section>;
@@ -1030,6 +1085,8 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
         {hotelMapUrl ? <a href={hotelMapUrl} target="_blank" rel="noreferrer"><BedDouble size={15}/><span>숙소로 이동</span></a> : <button onClick={() => onOpenTab('map')}><MapPin size={15}/><span>지도</span></button>}
       </div>
     </section>
+
+    <IcocaPlanPanel compact />
 
     <TravelResourceLinks groups={resourceGroups} compact title={focusDate === trip.start_date ? '공항 · 교토 바로가기' : '오늘 쓸 한국어 지도'} />
 
