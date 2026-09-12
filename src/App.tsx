@@ -118,6 +118,27 @@ const printableTabLabels: Record<Tab, string> = {
   inbox: 'AI 가져오기',
 };
 
+const printableMenuGroups: Array<{ mode: WorkspaceMode; title: string; items: Array<{ tab: Tab; label: string; description: string }> }> = [
+  { mode: 'plan', title: 'PLAN · 여행 전', items: [
+    { tab: 'guide', label: '준비 · 예약', description: '출발 전 체크 · 예약 · 식사 선택' },
+    { tab: 'budget', label: '예산 · 지출', description: '개인별 예산 · 전체 가계부' },
+    { tab: 'packing', label: '짐 · 코디', description: '가방 · 준비물 체크리스트' },
+    { tab: 'schedule', label: '일정 편집', description: '5일 전체 일정' },
+    { tab: 'votes', label: '후보 · 결정', description: '선택한 플랜 · 후보 장소' },
+    { tab: 'map', label: '지도 · 리서치', description: '장소 · 주소 모음' },
+    { tab: 'inbox', label: 'AI 가져오기', description: '가져온 일정 결과' },
+  ] },
+  { mode: 'trip', title: 'TRIP · 여행 중', items: [
+    { tab: 'today', label: '오늘', description: '오늘 일정 · 날씨' },
+    { tab: 'schedule', label: '전체 일정', description: '5일 전체 일정' },
+    { tab: 'trip-weather', label: '날씨 · 오늘의 코디', description: '여행일별 날씨 · 우천 대응' },
+    { tab: 'phrases', label: '일본어 표현', description: '현장용 일본어 전체' },
+    { tab: 'shopping-guide', label: '쇼핑 리스트', description: '간식 · 쇼핑 체크리스트' },
+    { tab: 'budget', label: '예산 · 지출', description: '여행 중 가계부' },
+    { tab: 'map', label: '지도', description: '오프라인 주소 모음' },
+  ] },
+];
+
 function openTripPrintView(tripId: string, view: 'all' | 'section', tab: Tab, mode: WorkspaceMode) {
   const query = new URLSearchParams({ view, tab, mode, autoprint: '1' });
   window.open(`/trip/${tripId}/print?${query.toString()}`, '_blank', 'noopener,noreferrer');
@@ -135,6 +156,7 @@ function TripPage({ tripId }: { tripId: string }) {
     return !stored || stored === 'Woosu' ? 'Oosu' : stored;
   });
   const [quickAdd, setQuickAdd] = useState(false);
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('mytrip-sidebar-open') !== '0');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [syncState, setSyncState] = useState({ online: navigator.onLine, pending: 0, failed: false });
@@ -325,8 +347,7 @@ function TripPage({ tripId }: { tripId: string }) {
           onToggleMode={() => selectMode(workspaceMode === 'plan' ? 'trip' : 'plan')}
           onAdd={() => setQuickAdd(true)}
           onOpenMenu={() => setMobileMenuOpen(true)}
-          onPrintCurrent={() => openTripPrintView(trip.id, 'section', tab, workspaceMode)}
-          onPrintAll={() => openTripPrintView(trip.id, 'all', tab, workspaceMode)}
+          onOpenPdf={() => setPdfMenuOpen(true)}
         />
         <OfflinePackBar info={offlinePack} saving={offlinePacking} resetting={offlineResetting} resetMessage={offlineResetMessage} online={syncState.online} error={offlinePackError} onSave={saveOfflinePack} onReset={resetOfflineData} />
         {(!syncState.online || syncState.pending > 0 || syncState.failed) && <div className={`sync-status-bar ${syncState.online ? 'syncing' : 'offline'}`}><span>{syncState.online ? <RefreshCw size={14}/> : <WifiOff size={14}/>}<b>{syncState.online ? (syncState.failed ? '동기화 재시도 필요' : '변경 동기화 중') : '오프라인'}</b>{syncState.pending > 0 && <em>{syncState.pending}개 변경 대기</em>}</span><small>{syncState.online ? '연결된 상태에서 자동 저장합니다.' : '일정 변경은 이 기기에 저장하고 연결되면 자동 반영합니다.'}</small></div>}
@@ -344,7 +365,8 @@ function TripPage({ tripId }: { tripId: string }) {
           {workspaceMode === 'plan' && tab === 'inbox' && <InboxPanel trip={trip} weather={weather} plannerName={plannerName} reload={reload} />}
         </div>
       </section>
-      {mobileMenuOpen && <MobileMenuDrawer trip={trip} mode={workspaceMode} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelectMode={selectMode} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} onPrintCurrent={() => openTripPrintView(trip.id, 'section', tab, workspaceMode)} onPrintAll={() => openTripPrintView(trip.id, 'all', tab, workspaceMode)} />}
+      {mobileMenuOpen && <MobileMenuDrawer trip={trip} mode={workspaceMode} tab={tab} plannerName={plannerName} onNameChange={updateName} onSelectMode={selectMode} onSelect={selectTab} onClose={() => setMobileMenuOpen(false)} onOpenPdf={() => { setMobileMenuOpen(false); setPdfMenuOpen(true); }} />}
+      {pdfMenuOpen && <PdfDownloadModal trip={trip} activeMode={workspaceMode} activeTab={tab} onClose={() => setPdfMenuOpen(false)} />}
       {quickAdd && <QuickAdd trip={trip} onClose={() => setQuickAdd(false)} reload={reload} />}
       <FloatingTripAssistant trip={trip} weather={weather} plannerName={plannerName} mode={workspaceMode} reload={reload} />
     </main>
@@ -447,7 +469,7 @@ function ModeSwitcher({ mode, onSelect }: { mode: WorkspaceMode; onSelect: (mode
   return <div className="mode-switcher" aria-label="여행 모드 선택"><button className={mode === 'plan' ? 'active' : ''} onClick={() => onSelect('plan')}><span>PLAN</span><small>여행 전</small></button><button className={mode === 'trip' ? 'active' : ''} onClick={() => onSelect('trip')}><span>TRIP</span><small>여행 중</small></button></div>;
 }
 
-function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose, onPrintCurrent, onPrintAll }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void; onPrintCurrent: () => void; onPrintAll: () => void }) {
+function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelectMode, onSelect, onClose, onOpenPdf }: { trip: Trip; mode: WorkspaceMode; tab: Tab; plannerName: string; onNameChange: (value: string) => void; onSelectMode: (mode: WorkspaceMode) => void; onSelect: (tab: Tab) => void; onClose: () => void; onOpenPdf: () => void }) {
   const groups: Array<{ label: string; items: Array<[Tab, React.ReactNode, string, number?]> }> = mode === 'plan' ? [
     { label: '준비', items: [['guide', <ClipboardCheck/>, '준비 · 예약'], ['budget', <Wallet/>, '예산 · 지출'], ['packing', <Luggage/>, '짐 · 코디']] },
     { label: '계획', items: [['schedule', <CalendarDays/>, '일정 편집'], ['votes', <Vote/>, '후보 · 결정', trip.places.length], ['map', <Compass/>, '지도 · 리서치']] },
@@ -461,12 +483,12 @@ function MobileMenuDrawer({ trip, mode, tab, plannerName, onNameChange, onSelect
       <header><div><span className="trip-emoji small">{trip.emoji}</span><div><strong>{trip.title}</strong><small>{formatDateRange(trip.start_date, trip.end_date)}</small></div></div><button onClick={onClose} aria-label="메뉴 닫기"><X size={22}/></button></header>
       <ModeSwitcher mode={mode} onSelect={onSelectMode} />
       <nav>{groups.map((group) => <NavGroup key={group.label} label={group.label}>{group.items.map(([key, icon, label, count]) => <NavButton key={key} active={tab === key} icon={icon} label={label} count={count} onClick={() => onSelect(key)} />)}</NavGroup>)}</nav>
-      <footer><div className="mobile-menu-pdf"><button onClick={() => { onPrintCurrent(); onClose(); }}><Printer size={15}/>{printableTabLabels[tab]} PDF</button><button onClick={() => { onPrintAll(); onClose(); }}><Download size={15}/>전체 여행 PDF</button></div><label className="planner-name"><Users size={16}/><input value={plannerName} onChange={(event) => onNameChange(event.target.value)} aria-label="내 이름" /></label><span>실시간 공동 편집</span></footer>
+      <footer><div className="mobile-menu-pdf"><button onClick={onOpenPdf}><Download size={15}/>메뉴별 PDF 다운로드</button></div><label className="planner-name"><Users size={16}/><input value={plannerName} onChange={(event) => onNameChange(event.target.value)} aria-label="내 이름" /></label><span>실시간 공동 편집</span></footer>
     </aside>
   </div>;
 }
 
-function TripHeader({ trip, weather, mode, activeTab, onToggleMode, onAdd, onOpenMenu, onPrintCurrent, onPrintAll }: { trip: Trip; weather: WeatherDay[]; mode: WorkspaceMode; activeTab: Tab; onToggleMode: () => void; onAdd: () => void; onOpenMenu: () => void; onPrintCurrent: () => void; onPrintAll: () => void }) {
+function TripHeader({ trip, weather, mode, activeTab, onToggleMode, onAdd, onOpenMenu, onOpenPdf }: { trip: Trip; weather: WeatherDay[]; mode: WorkspaceMode; activeTab: Tab; onToggleMode: () => void; onAdd: () => void; onOpenMenu: () => void; onOpenPdf: () => void }) {
   const today = todayInTimeZone('Asia/Tokyo');
   const featuredWeather = weather.find((item) => item.date === today) || weather[0];
   const forecastLabel = featuredWeather ? (featuredWeather.date === today ? '오늘 예보' : `${formatMonthDay(featuredWeather.date)} 예보`) : '';
@@ -477,12 +499,25 @@ function TripHeader({ trip, weather, mode, activeTab, onToggleMode, onAdd, onOpe
       <button className={`header-mode-chip ${mode}`} onClick={onToggleMode}><span>{mode.toUpperCase()}</span><small>{mode === 'plan' ? '여행 전' : '여행 중'}</small></button>
       {featuredWeather && <div className="weather-chip"><span>{weatherIcon(featuredWeather.code)}</span><div><strong>{Math.round(featuredWeather.max)}° / {Math.round(featuredWeather.min)}°</strong><small>{forecastLabel} · 강수 {featuredWeather.rain}%</small></div></div>}
       <div className="pdf-actions" aria-label="PDF 저장">
-        <button className="secondary pdf-action" onClick={onPrintCurrent} title={`${printableTabLabels[activeTab]} PDF 저장`}><Printer size={15}/><span>현재 메뉴 PDF</span></button>
-        <button className="secondary pdf-action all" onClick={onPrintAll} title="전체 여행 PDF 저장"><Download size={15}/><span>전체 PDF</span></button>
+        <button className="secondary pdf-action all" onClick={onOpenPdf} title={`${printableTabLabels[activeTab]} 포함 메뉴별 PDF 다운로드`}><Download size={15}/><span>메뉴별 PDF</span></button>
       </div>
       <button className="primary" onClick={onAdd}><Plus size={17} /> 일정 추가</button>
     </div>
   </header>;
+}
+
+function PdfDownloadModal({ trip, activeMode, activeTab, onClose }: { trip: Trip; activeMode: WorkspaceMode; activeTab: Tab; onClose: () => void }) {
+  function openSection(mode: WorkspaceMode, tab: Tab) {
+    openTripPrintView(trip.id, 'section', tab, mode);
+  }
+  return <div className="modal-backdrop pdf-download-backdrop" onMouseDown={onClose}>
+    <section className="pdf-download-modal" onMouseDown={(event) => event.stopPropagation()} aria-label="메뉴별 PDF 다운로드">
+      <header className="pdf-download-head"><div><p className="eyebrow">PDF DOWNLOADS</p><h2>메뉴별로 따로 저장</h2><p>필요한 메뉴만 눌러 각각 독립된 PDF로 저장하세요. 전체 33페이지를 계속 스크롤할 필요가 없습니다.</p></div><button className="icon-btn" onClick={onClose} aria-label="PDF 다운로드 닫기"><X size={17}/></button></header>
+      <div className="pdf-download-current"><span>현재 화면</span><button onClick={() => openSection(activeMode, activeTab)}><Printer size={15}/><strong>{activeMode.toUpperCase()} · {printableTabLabels[activeTab]}</strong><small>이 메뉴만 PDF</small></button></div>
+      <div className="pdf-download-groups">{printableMenuGroups.map((group) => <section key={group.mode}><header><span>{group.title}</span><small>{group.items.length}개 파일</small></header><div>{group.items.map((item) => <button key={`${group.mode}-${item.tab}`} className={activeMode === group.mode && activeTab === item.tab ? 'active' : ''} onClick={() => openSection(group.mode, item.tab)}><span className="pdf-download-icon"><Download size={14}/></span><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={14}/></button>)}</div></section>)}</div>
+      <footer className="pdf-download-footer"><div><strong>전체 여행본도 유지</strong><span>한 파일로 전부 필요할 때만 사용하세요.</span></div><button className="secondary" onClick={() => openTripPrintView(trip.id, 'all', activeTab, activeMode)}><Printer size={14}/>전체 여행 PDF</button></footer>
+    </section>
+  </div>;
 }
 
 function TripPrintPage({ tripId }: { tripId: string }) {
