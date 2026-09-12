@@ -139,6 +139,109 @@ const printableMenuGroups: Array<{ mode: WorkspaceMode; title: string; items: Ar
   ] },
 ];
 
+type TravelResourceGroup = 'airport' | 'kyoto' | 'osaka';
+type TravelResourceLink = {
+  id: string;
+  group: TravelResourceGroup;
+  badge: string;
+  title: string;
+  description: string;
+  href: string;
+};
+
+const travelResourceGroupLabels: Record<TravelResourceGroup, string> = {
+  airport: '9/13 출국 · 인천공항',
+  kyoto: '교토 · 한국어 지도',
+  osaka: '오사카 · 한국어 지도',
+};
+
+const travelResourceLinks: TravelResourceLink[] = [
+  {
+    id: 'arex-naver-route',
+    group: 'airport',
+    badge: 'NAVER MAP',
+    title: '홍대입구 → 인천공항 T1 길찾기',
+    description: '공항철도 대중교통 길찾기 · 05:57 열차 타기 전 실시간 경로 확인',
+    href: 'https://map.naver.com/p/directions/14129444.578106936,4517093.397315424,%ED%99%8D%EB%8C%80%EC%9E%85%EA%B5%AC%EC%97%AD,1,PLACE_POI/14076655.084560826,4501617.753528901,%EC%9D%B8%EC%B2%9C%EA%B3%B5%ED%95%AD1%ED%84%B0%EB%AF%B8%EB%84%90%EC%97%AD,1,PLACE_POI/-/transit?c=10.00,0,0,0,dh',
+  },
+  {
+    id: 'icn-tw301',
+    group: 'airport',
+    badge: 'ICN OFFICIAL',
+    title: 'TW301 체크인 카운터 · 탑승구',
+    description: '9/13 08:00 KIX행 · T1 · 체크인 카운터/게이트/출발현황 바로 확인',
+    href: 'https://www.airport.kr/dep/ap_ko/depPasSchList.do?daySel=20260913&fromTime=0700&toTime=0859&airplane=TW301&termId=T1&siteId=ap_ko&langSe=ko',
+  },
+  {
+    id: 'icn-security-live',
+    group: 'airport',
+    badge: 'ICN LIVE',
+    title: 'T1 출국장 실시간 대기시간',
+    description: '1~6번 출국장 동·서편 보안검색/출국심사 대기시간 비교 · 가장 빠른 곳 선택',
+    href: 'https://www.airport.kr/ap_ko/6651/subview.do',
+  },
+  {
+    id: 'naver-security-status',
+    group: 'airport',
+    badge: 'NAVER',
+    title: '네이버 인천공항 출국장 현황',
+    description: '네이버에서 인천공항 출국장 현황을 바로 검색해 공식 실시간 정보와 함께 비교',
+    href: 'https://search.naver.com/search.naver?query=%EC%9D%B8%EC%B2%9C%EA%B3%B5%ED%95%AD+%EC%B6%9C%EA%B5%AD%EC%9E%A5+%ED%98%84%ED%99%A9',
+  },
+  {
+    id: 'kyoto-korean-bus-map',
+    group: 'kyoto',
+    badge: '공식 PDF',
+    title: '교토 한국어 버스 · 지하철 관광지도',
+    description: '교토시 교통국 한국어 관광 지도 PDF · 주요 관광지와 버스/지하철 동선 확인',
+    href: 'https://www.city.kyoto.lg.jp/kotsu/cmsfiles/contents/0000019/19770/KOR%28omote%29260320busnavi.pdf',
+  },
+  {
+    id: 'kyoto-korean-tools',
+    group: 'kyoto',
+    badge: 'KYOTO OFFICIAL',
+    title: '교토 한국어 지도 · 현장 도구',
+    description: '교토시 공식 한국어 지도, 혼잡 예보, Kyoto Smart Navi, 교토역 디지털맵 모음',
+    href: 'https://kyoto.travel/ko/maps-and-tools/',
+  },
+  {
+    id: 'osaka-minami-korean-map',
+    group: 'osaka',
+    badge: '공식 PDF',
+    title: '오사카 미나미 · 오사카성 한국어 지도',
+    description: '난바·도톤보리·미나미와 오사카성 권역을 한 번에 보는 오사카관광국 한국어 지도',
+    href: 'https://s3.ap-northeast-1.amazonaws.com/content.osaka-info.jp/downloads/ko/2024+%E3%82%AD%E3%82%BF_%E3%83%9F%E3%83%8A%E3%83%9F_%E5%A4%A7%E9%98%AA%E5%9F%8E%E3%82%A8%E3%83%AA%E3%82%A2.pdf',
+  },
+  {
+    id: 'osaka-korean-rail-map',
+    group: 'osaka',
+    badge: '공식 PDF',
+    title: '오사카 한국어 전철 노선도',
+    description: 'Osaka Metro를 포함한 오사카 전철 전체 노선 한국어 지도',
+    href: 'https://s3.ap-northeast-1.amazonaws.com/content.osaka-info.jp/downloads/ko/2024%E8%B7%AF%E7%B7%9A%E5%9B%B3.pdf',
+  },
+  {
+    id: 'osaka-korean-maps',
+    group: 'osaka',
+    badge: 'OSAKA INFO',
+    title: '오사카 공식 한국어 지도 모음',
+    description: '미나미·덴노지·베이·오사카부 전역 지도와 가이드북을 한국어로 다운로드',
+    href: 'https://osaka-info.jp/ko/information/area-map-download/',
+  },
+];
+
+function TravelResourceLinks({ groups, compact = false, title = '여행 중 바로 쓰는 링크' }: { groups: TravelResourceGroup[]; compact?: boolean; title?: string }) {
+  const visibleGroups = groups.map((group) => ({ group, links: travelResourceLinks.filter((link) => link.group === group) })).filter(({ links }) => links.length);
+  return <section className={`travel-resource-hub ${compact ? 'compact' : ''}`} aria-label={title}>
+    <header><div><ExternalLink size={18}/><span><p className="eyebrow">QUICK LINKS</p><h3>{title}</h3></span></div><b>공식 · 한국어 · 현장용</b></header>
+    <div className="travel-resource-groups">{visibleGroups.map(({ group, links }) => <section key={group}><div className="travel-resource-group-title"><strong>{travelResourceGroupLabels[group]}</strong><span>{links.length}</span></div><div className="travel-resource-list">{links.map((link) => <a href={link.href} target="_blank" rel="noreferrer" key={link.id}><span className="travel-resource-badge">{link.badge}</span><span className="travel-resource-copy"><strong>{link.title}</strong><small>{link.description}</small></span><ExternalLink size={14}/></a>)}</div></section>)}</div>
+  </section>;
+}
+
+function travelResourceHref(id: string) {
+  return travelResourceLinks.find((link) => link.id === id)?.href || null;
+}
+
 function openTripPrintView(tripId: string, view: 'all' | 'section', tab: Tab, mode: WorkspaceMode) {
   const query = new URLSearchParams({ view, tab, mode, autoprint: '1' });
   window.open(`/trip/${tripId}/print?${query.toString()}`, '_blank', 'noopener,noreferrer');
@@ -448,6 +551,8 @@ function TripGuidePanel({ trip, reload }: { trip: Trip; reload: () => void }) {
       <div className="transport-grid">{transport.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div>
     </section>
 
+    <TravelResourceLinks groups={['airport', 'kyoto', 'osaka']} title="공항 · 한국어 관광지도 바로가기" />
+
     {optionGroups.map(([key, group]) => group && <section className="guide-section compare-section" key={key}><div className="guide-section-head"><div><Navigation/><span><p className="eyebrow">{key === 'esim' ? 'CONNECTIVITY' : 'TRANSIT OPTIONS'}</p><h3>{group.title}</h3></span></div></div><div className="compare-table-wrap"><table className="compare-table"><thead><tr><th>옵션</th><th>가격</th><th>포함 / 방식</th><th>우리 일정 적합도</th><th>판단</th><th></th></tr></thead><tbody>{group.items.map((item) => <tr key={item.id} className={item.recommended ? 'recommended' : ''}><td data-label="옵션"><strong>{item.name}</strong>{item.recommended ? <span className="recommend-tag">추천</span> : null}</td><td data-label="가격">{item.price || '—'}</td><td data-label="포함 · 방식">{item.coverage || '—'}</td><td data-label="일정 적합도">{item.fit || '—'}</td><td data-label="판단">{item.verdict || '—'}</td><td data-label="바로가기"><div className="compare-actions">{item.purchase_url && <a href={item.purchase_url} target="_blank" rel="noreferrer"><ExternalLink size={11}/>{item.action_label || '구매'}</a>}{item.source_url && item.source_url !== item.purchase_url && <a className="muted-link" href={item.source_url} target="_blank" rel="noreferrer">공식</a>}</div></td></tr>)}</tbody></table></div></section>)}
 
     <section className="guide-section restaurant-section">
@@ -637,6 +742,14 @@ function PrintCheck({ checked = false }: { checked?: boolean }) {
   return <span className={`print-checkbox ${checked ? 'checked' : ''}`}>{checked ? <Check size={11}/> : null}</span>;
 }
 
+function PrintTravelResourceLinks({ groups, title }: { groups: TravelResourceGroup[]; title: string }) {
+  const links = travelResourceLinks.filter((link) => groups.includes(link.group));
+  return <div className="print-card print-resource-links">
+    <h3>{title}</h3>
+    <div>{links.map((link) => <a href={link.href} key={link.id}><span>{link.badge}</span><strong>{link.title}</strong><small>{link.description}</small><em>클릭해서 열기</em></a>)}</div>
+  </div>;
+}
+
 function PrintGuideChapter({ trip }: { trip: Trip }) {
   const checklistGroups = trip.checklist.reduce<Record<string, typeof trip.checklist>>((groups, item) => { (groups[item.category] ||= []).push(item); return groups; }, {});
   const rules = trip.guides.filter((item) => item.section === 'rules');
@@ -652,6 +765,7 @@ function PrintGuideChapter({ trip }: { trip: Trip }) {
       <div className="print-card"><h3>선택 식당 · 예약 상태</h3>{selectedRestaurants.length ? selectedRestaurants.map((restaurant) => <div className="print-reservation-row" key={restaurant.id}><PrintCheck checked={restaurant.reservation_status === 'BOOKED' || restaurant.reservation_action === 'WALK-IN ONLY'}/><div><strong>{restaurant.name}</strong><small>{restaurant.planned_date ? `${formatMonthDay(restaurant.planned_date)} ${restaurant.planned_time || ''}` : restaurant.city || ''} · {restaurant.price_range || '예산 확인'}</small></div><b>{restaurant.reservation_action === 'WALK-IN ONLY' ? 'WALK-IN' : restaurant.reservation_status}</b></div>) : <p className="print-muted">선택된 식당이 없습니다.</p>}</div>
     </div>
     {transport.length > 0 && <div className="print-card print-transport"><h3>구간별 이동</h3><div>{transport.map((item) => <article key={item.id}><strong>{item.title}</strong>{item.subtitle && <span>{item.subtitle}</span>}<p>{item.details}</p></article>)}</div></div>}
+    <PrintTravelResourceLinks groups={['airport', 'kyoto', 'osaka']} title="공항 · 한국어 관광지도 바로가기" />
     <div className="print-card print-meals"><h3>식사별 선택 · PLAN B</h3>{(trip.meal_slots || []).map((slot) => <section key={slot.id}><header><span>{formatMonthDay(slot.date)} · {slot.time || ''} · {slot.area || ''}</span><strong>{slot.label}</strong></header><div>{slot.option_ids.map((restaurantId) => { const restaurant = restaurants.get(restaurantId); if (!restaurant) return null; const selected = slot.selected_restaurant_id === restaurant.id; return <article className={selected ? 'selected' : ''} key={restaurant.id}><span>{selected ? 'SELECTED' : 'PLAN B'}</span><strong>{restaurant.name}</strong><small>{restaurant.price_range || '예산 확인'} · {restaurant.hours || '영업시간 확인'}</small>{restaurant.notes && <p>{restaurant.notes}</p>}</article>; })}</div></section>)}</div>
   </section>;
 }
@@ -726,6 +840,7 @@ function PrintMapChapter({ trip }: { trip: Trip }) {
   const eventPlaces = trip.events.filter((event) => event.location || event.address);
   return <section className="print-chapter">
     <PrintChapterTitle eyebrow="PLAN/TRIP · 지도 · 장소" title="오프라인 주소 모음" meta={`${eventPlaces.length + trip.places.length} locations`}/>
+    <PrintTravelResourceLinks groups={['kyoto', 'osaka']} title="교토 · 오사카 한국어 관광지도" />
     <div className="print-card print-address-list"><h3>일정 장소</h3>{eventPlaces.map((event) => <div key={event.id}><span>{formatMonthDay(event.date)} {event.start_time || ''}</span><strong>{event.title}</strong><small>{event.address || event.location}</small></div>)}</div>
     {trip.places.length > 0 && <div className="print-card print-address-list"><h3>저장한 후보</h3>{trip.places.map((place) => <div key={place.id}><span>{place.category}</span><strong>{place.name}</strong><small>{place.address || place.notes || '주소 미등록'}</small></div>)}</div>}
   </section>;
@@ -746,6 +861,7 @@ function PrintTodayChapter({ trip, weather }: { trip: Trip; weather: WeatherDay[
   const item = weather.find((entry) => entry.date === target);
   return <section className="print-chapter">
     <PrintChapterTitle eyebrow="TRIP · 오늘" title={`${formatDay(target)} 현장용 한 장`} meta={item ? `${weatherIcon(item.code)} ${Math.round(item.max)}°/${Math.round(item.min)}° · 강수 ${Math.round(item.rain)}%` : undefined}/>
+    {target === trip.start_date && <PrintTravelResourceLinks groups={['airport', 'kyoto']} title="출국 · 교토 도착 바로가기" />}
     <PrintScheduleChapter trip={trip} targetDate={target}/>
   </section>;
 }
@@ -818,6 +934,11 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
   const hotelMapUrl = currentHotel ? googleMapsEventUrl(currentHotel) : null;
   const nextTransport = typeof nextEvent?.meta?.transport === 'string' ? nextEvent.meta.transport : null;
   const nextWalking = typeof nextEvent?.meta?.walking === 'string' ? nextEvent.meta.walking : null;
+  const resourceGroups: TravelResourceGroup[] = focusDate === trip.start_date
+    ? ['airport', 'kyoto']
+    : focusDate <= '2026-09-15'
+      ? ['kyoto']
+      : ['osaka'];
   const rainLevel = dayWeather ? Math.round(dayWeather.rain) : null;
   const fieldAlert = nextWindowRain !== null && nextWindowRain >= 60
     ? `다음 일정 시간대 비 ${nextWindowRain}% · 야외 일정은 Plan B 준비`
@@ -873,7 +994,7 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
       <div className="trip-field-alert"><CloudRain size={16}/><span>{fieldAlert}</span></div>
     </section>
 
-    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><div className="trip-scroll-controls"><b>{remainingCount > 0 ? `미처리 ${remainingCount}개 · ${liveGroups.length}개 묶음` : '오늘 일정 종료'}</b><button onClick={() => scrollLiveEvents(-1)} aria-label="이전 일정"><ArrowLeft size={15}/></button><button onClick={() => scrollLiveEvents(1)} aria-label="다음 일정"><ChevronRight size={15}/></button></div></div><div className="trip-live-events" ref={liveEventRef}>{liveGroups.map((group) => group.events.length > 1 ? <TripJourneyCard key={group.id} group={group} active={active} now={now} nextEventId={nextEvent?.id} onSetStatus={setEventStatus}/> : (() => { const event = group.events[0]; const mapUrl = googleMapsEventUrl(event); const status = tripEventStatus(event); const eventIndex = events.findIndex((item) => item.id === event.id); const isNow = active && status === 'PLANNED' && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; const liveLabel = status === 'DONE' ? 'DONE' : status === 'SKIPPED' ? 'SKIP' : status === 'CANCELLED' ? 'CANCEL' : isNow ? 'NOW' : eventIndex === contextIndex ? 'PREV' : eventIndex === nextIndex ? 'NEXT' : 'THEN'; return <article className={`trip-live-event status-${status.toLowerCase()} ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{liveLabel}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions trip-state-actions"><button disabled={!active} className={`trip-complete-action ${status === 'DONE' ? 'done' : ''}`} onClick={() => setEventStatus(event, 'DONE')}><Check size={14}/>{!active ? '여행 시작 후 체크' : status === 'DONE' ? '완료 취소' : '완료'}</button><button disabled={!active} className={status === 'SKIPPED' ? 'skip-active' : ''} onClick={() => setEventStatus(event, 'SKIPPED')}><FastForward size={13}/>{status === 'SKIPPED' ? '건너뜀 취소' : '건너뜀'}</button>{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}</div></div></article>; })())}</div></section>
+    <section className="trip-now-section"><div className="trip-section-heading"><div><Navigation/><span><p className="eyebrow">NOW · NEXT</p><h3>지금부터 다음 일정</h3></span></div><div className="trip-scroll-controls"><b>{remainingCount > 0 ? `미처리 ${remainingCount}개 · ${liveGroups.length}개 묶음` : '오늘 일정 종료'}</b><button onClick={() => scrollLiveEvents(-1)} aria-label="이전 일정"><ArrowLeft size={15}/></button><button onClick={() => scrollLiveEvents(1)} aria-label="다음 일정"><ChevronRight size={15}/></button></div></div><div className="trip-live-events" ref={liveEventRef}>{liveGroups.map((group) => group.events.length > 1 ? <TripJourneyCard key={group.id} group={group} active={active} now={now} nextEventId={nextEvent?.id} onSetStatus={setEventStatus}/> : (() => { const event = group.events[0]; const mapUrl = googleMapsEventUrl(event); const naverTransitUrl = /AREX|공항철도/i.test(`${event.title} ${event.location || ''}`) ? travelResourceHref('arex-naver-route') : null; const status = tripEventStatus(event); const eventIndex = events.findIndex((item) => item.id === event.id); const isNow = active && status === 'PLANNED' && event.start_time && event.end_time && event.start_time <= now && event.end_time >= now; const liveLabel = status === 'DONE' ? 'DONE' : status === 'SKIPPED' ? 'SKIP' : status === 'CANCELLED' ? 'CANCEL' : isNow ? 'NOW' : eventIndex === contextIndex ? 'PREV' : eventIndex === nextIndex ? 'NEXT' : 'THEN'; return <article className={`trip-live-event status-${status.toLowerCase()} ${isNow ? 'now' : ''}`} key={event.id}><EventVisual event={event} mapUrl={mapUrl}/><div className="trip-live-event-copy"><div><span>{liveLabel}</span><b>{event.start_time || '--:--'}{event.end_time ? `–${event.end_time}` : ''}</b></div><h4>{event.title}</h4>{event.location && <p>{event.location}</p>}<div className="trip-live-actions trip-state-actions"><button disabled={!active} className={`trip-complete-action ${status === 'DONE' ? 'done' : ''}`} onClick={() => setEventStatus(event, 'DONE')}><Check size={14}/>{!active ? '여행 시작 후 체크' : status === 'DONE' ? '완료 취소' : '완료'}</button><button disabled={!active} className={status === 'SKIPPED' ? 'skip-active' : ''} onClick={() => setEventStatus(event, 'SKIPPED')}><FastForward size={13}/>{status === 'SKIPPED' ? '건너뜀 취소' : '건너뜀'}</button>{naverTransitUrl && <a href={naverTransitUrl} target="_blank" rel="noreferrer"><Navigation size={14}/>NAVER 길찾기</a>}{mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google Maps</a>}</div></div></article>; })())}</div></section>
 
     <section className="trip-command-center">
       <div className="trip-section-heading"><div><Compass/><span><p className="eyebrow">FIELD COMMAND</p><h3>현장에서 바로 쓰기</h3></span></div><b>지도 · 식사 · 숙소를 한 번에</b></div>
@@ -910,6 +1031,8 @@ function TripLivePanel({ trip, weather, weatherHours, reload, onOpenTab }: { tri
       </div>
     </section>
 
+    <TravelResourceLinks groups={resourceGroups} compact title={focusDate === trip.start_date ? '공항 · 교토 바로가기' : '오늘 쓸 한국어 지도'} />
+
     {(reservationRows.length > 0 || decisions.length > 0) && <section className="trip-support-hub">
       <div className="trip-section-heading"><div><MoreHorizontal/><span><p className="eyebrow">TODAY'S SUPPORT</p><h3>오늘 참고</h3></span></div><b>필요한 정보만 하나씩 보기</b></div>
       <div className="trip-support-tabs" role="tablist" aria-label="오늘 참고 정보">
@@ -931,6 +1054,7 @@ function TripJourneyCard({ group, active, now, nextEventId, onSetStatus }: { gro
   const done = group.events.filter((event) => tripEventStatus(event) === 'DONE').length;
   const skipped = group.events.filter((event) => tripEventStatus(event) === 'SKIPPED').length;
   const mapUrl = googleMapsJourneyUrl(group.events);
+  const naverTransitUrl = group.events.some((event) => /AREX|공항철도/i.test(`${event.title} ${event.location || ''}`)) ? travelResourceHref('arex-naver-route') : null;
   const focusStatus = nextStep ? tripEventStatus(nextStep) : 'PLANNED';
   return <article className={`trip-live-event trip-journey-card ${currentStep ? 'now' : ''}`}>
     <header className="trip-journey-head"><span>{currentStep ? 'NOW ROUTE' : nextStep?.id === nextEventId ? 'NEXT ROUTE' : 'ROUTE'}</span><b>{first.start_time || '--:--'}–{last.end_time || last.start_time || '--:--'}</b></header>
@@ -938,7 +1062,7 @@ function TripJourneyCard({ group, active, now, nextEventId, onSetStatus }: { gro
     <div className="trip-journey-summary"><span>{group.events.length} steps</span>{done > 0 && <span>{done} 완료</span>}{skipped > 0 && <span>{skipped} 건너뜀</span>}</div>
     {nextStep && <div className={`trip-journey-focus status-${focusStatus.toLowerCase()}`}><span>NEXT STEP</span><div><b>{nextStep.start_time || '--:--'}</b><strong>{nextStep.title}</strong>{nextStep.location && <small>{nextStep.location}</small>}</div><span className="journey-step-actions"><button disabled={!active} className={focusStatus === 'DONE' ? 'done' : ''} onClick={() => onSetStatus(nextStep, 'DONE')} aria-label={`${nextStep.title} 완료`}><Check size={13}/></button><button disabled={!active} className={focusStatus === 'SKIPPED' ? 'skip-active' : ''} onClick={() => onSetStatus(nextStep, 'SKIPPED')} aria-label={`${nextStep.title} 건너뜀`}><FastForward size={12}/></button></span></div>}
     <details className="trip-journey-details"><summary>전체 {group.events.length}단계 보기 <ChevronRight size={14}/></summary><div className="trip-journey-steps">{group.events.map((event, index) => { const status = tripEventStatus(event); return <div className={`trip-journey-step status-${status.toLowerCase()}`} key={event.id}><span className="journey-step-index">{index + 1}</span><div><b>{event.start_time || '--:--'}</b><strong>{event.title}</strong>{event.location && <small>{event.location}</small>}</div><span className="journey-step-actions"><button disabled={!active} className={status === 'DONE' ? 'done' : ''} onClick={() => onSetStatus(event, 'DONE')} aria-label={`${event.title} 완료`}><Check size={13}/></button><button disabled={!active} className={status === 'SKIPPED' ? 'skip-active' : ''} onClick={() => onSetStatus(event, 'SKIPPED')} aria-label={`${event.title} 건너뜀`}><FastForward size={12}/></button></span></div>; })}</div></details>
-    {mapUrl && <a className="trip-journey-map" href={mapUrl} target="_blank" rel="noreferrer"><Navigation size={14}/>이 이동 전체 길찾기</a>}
+    <div className="trip-journey-map-actions">{naverTransitUrl && <a className="trip-journey-map" href={naverTransitUrl} target="_blank" rel="noreferrer"><Navigation size={14}/>NAVER 공항철도 길찾기</a>}{mapUrl && <a className="trip-journey-map" href={mapUrl} target="_blank" rel="noreferrer"><MapPin size={14}/>Google 전체 동선</a>}</div>
   </article>;
 }
 
@@ -1547,6 +1671,7 @@ function TripFieldMapPanel({ trip, online }: { trip: Trip; online: boolean }) {
   };
   const mappedStops = events.filter((event) => event.lat && event.lng).length;
   const label = view === 'route' ? '오늘 전체 동선' : view === 'food' ? '오늘 식사' : '오늘 숙소';
+  const resourceGroups: TravelResourceGroup[] = focusDate <= '2026-09-15' ? ['kyoto'] : ['osaka'];
   return <div className="trip-field-map-page">
     <section className="trip-map-toolbar">
       <div><p className="eyebrow">FIELD MAP · {formatDay(focusDate)}</p><h2>오늘 지도</h2><p>여행 중에는 후보 리서치 대신 오늘 일정과 바로 이동할 장소만 봅니다.</p></div>
@@ -1570,6 +1695,7 @@ function TripFieldMapPanel({ trip, online }: { trip: Trip; online: boolean }) {
         })}</div>
       </aside>
     </div>
+    <TravelResourceLinks groups={resourceGroups} compact title="한국어 관광지도 · 교통지도" />
   </div>;
 }
 
